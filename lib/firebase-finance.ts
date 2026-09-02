@@ -8,8 +8,7 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { firestore, firebaseStorage } from './firebase';
+import { firestore } from './firebase';
 
 export const HOUSEHOLD_ID = 'main';
 
@@ -34,8 +33,6 @@ export type FirebaseTransaction = {
   direction: 'ida' | 'volta' | null;
   recurring: boolean;
   installment: string | null;
-  receiptUrl?: string | null;
-  receiptName?: string | null;
 };
 
 const accountsPath = collection(
@@ -242,27 +239,12 @@ export async function saveFirebaseTransaction(
   transaction: FirebaseTransaction,
   currentBalanceCents: number,
   balanceDelta: number,
-  receipt?: File | null,
 ) {
-  let receiptUrl = transaction.receiptUrl ?? null;
-  if (receipt) {
-    const receiptRef = ref(
-      firebaseStorage,
-      `households/${HOUSEHOLD_ID}/receipts/${transaction.id}/${receipt.name}`,
-    );
-    await uploadBytes(receiptRef, receipt, { contentType: receipt.type });
-    receiptUrl = await getDownloadURL(receiptRef);
-  }
-  const saved = {
-    ...transaction,
-    receiptUrl,
-    receiptName: receipt?.name ?? transaction.receiptName ?? null,
-  };
   const batch = writeBatch(firestore);
-  batch.set(doc(transactionsPath, transaction.id), saved);
+  batch.set(doc(transactionsPath, transaction.id), transaction);
   batch.update(doc(accountsPath, transaction.accountId), {
     balanceCents: currentBalanceCents + balanceDelta,
   });
   await batch.commit();
-  return saved;
+  return transaction;
 }

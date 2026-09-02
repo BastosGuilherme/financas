@@ -25,7 +25,6 @@ import {
   TrendingUp,
   WalletCards,
   X,
-  Image as ImageIcon,
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
@@ -62,10 +61,6 @@ type Transaction = {
   direction: 'ida' | 'volta' | null;
   recurring: boolean;
   installment: string | null;
-  receiptKey?: string | null;
-  receiptUrl?: string | null;
-  receiptName?: string | null;
-  receiptContentType?: string | null;
 };
 
 type Budget = {
@@ -94,8 +89,6 @@ type FormState = {
   direction: 'ida' | 'volta' | '';
   recurring: boolean;
   installment: string;
-  receiptFile: File | null;
-  receiptPreviewUrl: string;
 };
 
 const monthLabel = new Intl.DateTimeFormat('pt-BR', {
@@ -266,8 +259,6 @@ export default function Home() {
     direction: '',
     recurring: false,
     installment: '',
-    receiptFile: null,
-    receiptPreviewUrl: '',
   });
 
   useEffect(() => {
@@ -448,7 +439,6 @@ export default function Home() {
       direction: form.direction || null,
       recurring: form.recurring,
       installment: form.installment || null,
-      receiptName: form.receiptFile?.name ?? null,
     };
     try {
       const selectedAccount = payload.accounts.find(
@@ -467,7 +457,6 @@ export default function Home() {
         optimistic,
         selectedAccount.balanceCents,
         balanceDelta,
-        form.receiptFile,
       );
       setPayload((current) => ({
         ...current,
@@ -494,8 +483,6 @@ export default function Home() {
         amount: '',
         installment: '',
         recurring: false,
-        receiptFile: null,
-        receiptPreviewUrl: '',
       }));
     }
   }
@@ -1538,37 +1525,6 @@ export default function Home() {
                   </select>
                 </label>
               )}
-              <label className="receipt-upload">
-                Foto da nota
-                <span className="receipt-upload-control">
-                  <ImageIcon size={16} />
-                  <span>
-                    {form.receiptFile?.name ?? 'Tirar ou escolher foto'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      setForm((current) => ({
-                        ...current,
-                        receiptFile: file,
-                        receiptPreviewUrl: file
-                          ? URL.createObjectURL(file)
-                          : '',
-                      }));
-                    }}
-                  />
-                </span>
-                {form.receiptPreviewUrl && (
-                  <img
-                    className="receipt-preview"
-                    src={form.receiptPreviewUrl}
-                    alt="Pré-visualização da nota"
-                  />
-                )}
-              </label>
               <div className="form-options">
                 <label className="check-label">
                   <input
@@ -1650,17 +1606,6 @@ function TransactionRow({
               : ''}
             {transaction.recurring ? 'Recorrente · ' : ''}
             {transaction.category}
-            {transaction.receiptUrl && (
-              <a
-                className="receipt-link"
-                href={transaction.receiptUrl}
-                target="_blank"
-                rel="noreferrer"
-                title={transaction.receiptName ?? 'Abrir foto da nota'}
-              >
-                <ImageIcon size={12} /> Nota
-              </a>
-            )}
           </small>
         </div>
       </div>
