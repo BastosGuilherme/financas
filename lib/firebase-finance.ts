@@ -73,6 +73,112 @@ const starterAccounts: FirebaseAccount[] = [
     }) as FirebaseAccount,
 );
 
+const starterTransactions: FirebaseTransaction[] = [
+  [
+    'sheet-payment-old-rent',
+    'Aluguel antigo',
+    'Moradia',
+    'bank-gui',
+    139000,
+    '2026-09-02',
+  ],
+  [
+    'sheet-payment-new-rent',
+    'Novo aluguel',
+    'Moradia',
+    'bank-gui',
+    351237,
+    '2026-09-02',
+  ],
+  [
+    'sheet-payment-condo',
+    'Condomínio',
+    'Moradia',
+    'bank-gui',
+    76000,
+    '2026-09-02',
+  ],
+  [
+    'sheet-payment-card',
+    'Pagamento do cartão de crédito',
+    'Outros',
+    'bank-gui',
+    446699,
+    '2026-09-02',
+  ],
+  ['sheet-payment-josy', 'Josy', 'Outros', 'bank-gui', 20000, '2026-09-02'],
+  [
+    'sheet-payment-energy',
+    'Energia',
+    'Moradia',
+    'bank-gui',
+    29000,
+    '2026-09-02',
+  ],
+  [
+    'sheet-payment-sanasa',
+    'Sanasa',
+    'Moradia',
+    'bank-gui',
+    19000,
+    '2026-09-02',
+  ],
+  [
+    'sheet-payment-internet',
+    'Internet',
+    'Assinaturas',
+    'bank-gui',
+    10200,
+    '2026-09-02',
+  ],
+  [
+    'sheet-payment-spotify',
+    'Spotify',
+    'Assinaturas',
+    'bank-gui',
+    1364,
+    '2026-09-02',
+  ],
+  [
+    'sheet-uber-0901-1',
+    'Uber para trabalhar',
+    'Transporte',
+    'flash-gui',
+    1104,
+    '2026-09-01',
+  ],
+  [
+    'sheet-uber-0901-2',
+    'Uber para trabalhar',
+    'Transporte',
+    'flash-gui',
+    1290,
+    '2026-09-01',
+  ],
+  [
+    'sheet-uber-0902-1',
+    'Uber para trabalhar',
+    'Transporte',
+    'flash-gui',
+    4202,
+    '2026-09-02',
+  ],
+].map(
+  ([id, description, category, accountId, amountCents, transactionDate]) =>
+    ({
+      id,
+      description,
+      category,
+      accountId,
+      amountCents,
+      transactionDate,
+      type: 'expense',
+      direction: null,
+      recurring: false,
+      installment: null,
+    }) as FirebaseTransaction,
+);
+
 export async function ensureMember(user: {
   uid: string;
   email: string | null;
@@ -106,9 +212,19 @@ export async function loadFirebaseFinance() {
     getDocs(accountsPath),
     getDocs(query(transactionsPath, orderBy('transactionDate', 'desc'))),
   ]);
+  if (transactionsResult.empty) {
+    const batch = writeBatch(firestore);
+    starterTransactions.forEach((transaction) =>
+      batch.set(doc(transactionsPath, transaction.id), transaction),
+    );
+    await batch.commit();
+  }
+  const finalTransactionsResult = transactionsResult.empty
+    ? await getDocs(query(transactionsPath, orderBy('transactionDate', 'desc')))
+    : transactionsResult;
   return {
     accounts: accountsResult.docs.map((item) => item.data() as FirebaseAccount),
-    transactions: transactionsResult.docs.map(
+    transactions: finalTransactionsResult.docs.map(
       (item) => item.data() as FirebaseTransaction,
     ),
     budgets: [],
