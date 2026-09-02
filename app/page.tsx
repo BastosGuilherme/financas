@@ -25,6 +25,7 @@ import {
   TrendingUp,
   WalletCards,
   X,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
@@ -49,6 +50,9 @@ type Transaction = {
   direction: 'ida' | 'volta' | null;
   recurring: boolean;
   installment: string | null;
+  receiptKey?: string | null;
+  receiptName?: string | null;
+  receiptContentType?: string | null;
 };
 
 type Budget = {
@@ -77,11 +81,22 @@ type FormState = {
   direction: 'ida' | 'volta' | '';
   recurring: boolean;
   installment: string;
+  receiptFile: File | null;
+  receiptPreviewUrl: string;
 };
 
-const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
-const shortDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
-const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const monthLabel = new Intl.DateTimeFormat('pt-BR', {
+  month: 'long',
+  year: 'numeric',
+});
+const shortDate = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: 'short',
+});
+const currency = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
 
 const categories = [
   { name: 'Alimentação', color: '#f59e0b' },
@@ -138,22 +153,70 @@ function getCurrentMonth() {
 }
 
 function SignInGate() {
-  return <main className="access-gate"><div className="access-card"><span className="access-mark"><CircleDollarSign size={23} /></span><p className="eyebrow">Nossa casa · finanças a dois</p><h1>Entre para acessar o controle</h1><p>Os saldos e lançamentos da casa ficam visíveis somente para quem entrar na própria conta.</p><a className="primary-button access-button" href="/signin-with-chatgpt?return_to=%2F" target="_top">Entrar com ChatGPT <ArrowUpRight size={16} /></a><small>Depois do login, Gui e Fer compartilham a mesma visão financeira.</small></div></main>;
+  return (
+    <main className="access-gate">
+      <div className="access-card">
+        <span className="access-mark">
+          <CircleDollarSign size={23} />
+        </span>
+        <p className="eyebrow">Nossa casa · finanças a dois</p>
+        <h1>Entre para acessar o controle</h1>
+        <p>
+          Os saldos e lançamentos da casa ficam visíveis somente para quem
+          entrar na própria conta.
+        </p>
+        <a
+          className="primary-button access-button"
+          href="/signin-with-chatgpt?return_to=%2F"
+          target="_top"
+        >
+          Entrar com ChatGPT <ArrowUpRight size={16} />
+        </a>
+        <small>
+          Depois do login, Gui e Fer compartilham a mesma visão financeira.
+        </small>
+      </div>
+    </main>
+  );
 }
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<(typeof navItems)[number]['id']>('overview');
-  const [payload, setPayload] = useState<FinancePayload>({ mode: 'preview', currentUser: { displayName: 'Gui & Fer', email: '' }, household: { name: 'Casa do Gui & Fer' }, accounts: [], transactions: [], budgets: [] });
+  const [activeView, setActiveView] =
+    useState<(typeof navItems)[number]['id']>('overview');
+  const [payload, setPayload] = useState<FinancePayload>({
+    mode: 'preview',
+    currentUser: { displayName: 'Gui & Fer', email: '' },
+    household: { name: 'Casa do Gui & Fer' },
+    accounts: [],
+    transactions: [],
+    budgets: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isBalanceEditorOpen, setIsBalanceEditorOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingBalances, setIsSavingBalances] = useState(false);
-  const [accessState, setAccessState] = useState<'checking' | 'authenticated' | 'anonymous' | 'error'>('checking');
+  const [accessState, setAccessState] = useState<
+    'checking' | 'authenticated' | 'anonymous' | 'error'
+  >('checking');
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('Todos');
-  const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>({});
-  const [form, setForm] = useState<FormState>({ type: 'expense', description: '', amount: '', category: 'Alimentação', accountId: '', transactionDate: today, direction: '', recurring: false, installment: '' });
+  const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>(
+    {},
+  );
+  const [form, setForm] = useState<FormState>({
+    type: 'expense',
+    description: '',
+    amount: '',
+    category: 'Alimentação',
+    accountId: '',
+    transactionDate: today,
+    direction: '',
+    recurring: false,
+    installment: '',
+    receiptFile: null,
+    receiptPreviewUrl: '',
+  });
 
   useEffect(() => {
     let active = true;
@@ -170,44 +233,141 @@ export default function Home() {
         const financeData = data as FinancePayload;
         if (!active || !data) return;
         setPayload(financeData);
-        setForm((current) => ({ ...current, accountId: financeData.accounts[0]?.id ?? '' }));
+        setForm((current) => ({
+          ...current,
+          accountId: financeData.accounts[0]?.id ?? '',
+        }));
         setAccessState('authenticated');
       })
       .catch(() => active && setAccessState('error'))
       .finally(() => active && setIsLoading(false));
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const currentMonth = getCurrentMonth();
   const monthName = monthLabel.format(new Date(`${currentMonth}-01T12:00:00`));
-  const monthTransactions = useMemo(() => payload.transactions.filter((transaction) => transaction.transactionDate.startsWith(currentMonth)), [payload.transactions, currentMonth]);
-  const expenses = useMemo(() => monthTransactions.filter((transaction) => transaction.type === 'expense'), [monthTransactions]);
-  const incomes = useMemo(() => monthTransactions.filter((transaction) => transaction.type === 'income'), [monthTransactions]);
-  const totalExpenses = expenses.reduce((sum, transaction) => sum + transaction.amountCents, 0);
-  const totalIncomes = incomes.reduce((sum, transaction) => sum + transaction.amountCents, 0);
-  const uberExpenses = payload.transactions.filter((transaction) => transaction.description.toLowerCase().includes('uber') && transaction.type === 'expense');
-  const uberTotal = uberExpenses.reduce((sum, transaction) => sum + transaction.amountCents, 0);
-  const bankBalance = payload.accounts.filter((account) => account.kind === 'bank').reduce((sum, account) => sum + account.balanceCents, 0);
-  const flashBalance = payload.accounts.filter((account) => account.kind === 'flash').reduce((sum, account) => sum + account.balanceCents, 0);
-  const cardBalance = payload.accounts.filter((account) => account.kind === 'credit_card').reduce((sum, account) => sum + account.balanceCents, 0);
+  const monthTransactions = useMemo(
+    () =>
+      payload.transactions.filter((transaction) =>
+        transaction.transactionDate.startsWith(currentMonth),
+      ),
+    [payload.transactions, currentMonth],
+  );
+  const expenses = useMemo(
+    () =>
+      monthTransactions.filter((transaction) => transaction.type === 'expense'),
+    [monthTransactions],
+  );
+  const incomes = useMemo(
+    () =>
+      monthTransactions.filter((transaction) => transaction.type === 'income'),
+    [monthTransactions],
+  );
+  const totalExpenses = expenses.reduce(
+    (sum, transaction) => sum + transaction.amountCents,
+    0,
+  );
+  const totalIncomes = incomes.reduce(
+    (sum, transaction) => sum + transaction.amountCents,
+    0,
+  );
+  const uberExpenses = payload.transactions.filter(
+    (transaction) =>
+      transaction.description.toLowerCase().includes('uber') &&
+      transaction.type === 'expense',
+  );
+  const uberTotal = uberExpenses.reduce(
+    (sum, transaction) => sum + transaction.amountCents,
+    0,
+  );
+  const bankBalance = payload.accounts
+    .filter((account) => account.kind === 'bank')
+    .reduce((sum, account) => sum + account.balanceCents, 0);
+  const flashBalance = payload.accounts
+    .filter((account) => account.kind === 'flash')
+    .reduce((sum, account) => sum + account.balanceCents, 0);
+  const cardBalance = payload.accounts
+    .filter((account) => account.kind === 'credit_card')
+    .reduce((sum, account) => sum + account.balanceCents, 0);
   const available = bankBalance + flashBalance - cardBalance;
-  const reserves = payload.accounts.filter((account) => account.kind === 'reserve').reduce((sum, account) => sum + account.balanceCents, 0);
-  const filteredTransactions = payload.transactions.filter((transaction) => filter === 'Todos' || transaction.type === filter.toLowerCase());
-  const categoryTotals = expenses.reduce<Record<string, number>>((totals, transaction) => { totals[transaction.category] = (totals[transaction.category] ?? 0) + transaction.amountCents; return totals; }, {});
-  const budgetProgress = payload.budgets.filter((budget) => budget.month === currentMonth).map((budget) => ({ ...budget, spentCents: categoryTotals[budget.category] ?? 0, percent: budget.limitCents ? Math.round(((categoryTotals[budget.category] ?? 0) / budget.limitCents) * 100) : 0 }));
+  const reserves = payload.accounts
+    .filter((account) => account.kind === 'reserve')
+    .reduce((sum, account) => sum + account.balanceCents, 0);
+  const filteredTransactions = payload.transactions.filter(
+    (transaction) =>
+      filter === 'Todos' || transaction.type === filter.toLowerCase(),
+  );
+  const categoryTotals = expenses.reduce<Record<string, number>>(
+    (totals, transaction) => {
+      totals[transaction.category] =
+        (totals[transaction.category] ?? 0) + transaction.amountCents;
+      return totals;
+    },
+    {},
+  );
+  const budgetProgress = payload.budgets
+    .filter((budget) => budget.month === currentMonth)
+    .map((budget) => ({
+      ...budget,
+      spentCents: categoryTotals[budget.category] ?? 0,
+      percent: budget.limitCents
+        ? Math.round(
+            ((categoryTotals[budget.category] ?? 0) / budget.limitCents) * 100,
+          )
+        : 0,
+    }));
 
   function openBalanceEditor() {
-    setBalanceDrafts(Object.fromEntries(payload.accounts.map((account) => [account.id, (account.balanceCents / 100).toFixed(2).replace('.', ',')] )));
+    setBalanceDrafts(
+      Object.fromEntries(
+        payload.accounts.map((account) => [
+          account.id,
+          (account.balanceCents / 100).toFixed(2).replace('.', ','),
+        ]),
+      ),
+    );
     setIsBalanceEditorOpen(true);
   }
 
   async function saveBalances() {
     setIsSavingBalances(true);
-    const updates = payload.accounts.map((account) => ({ accountId: account.id, balanceCents: Math.round(Number((balanceDrafts[account.id] ?? '').replace(',', '.')) * 100) }));
-    setPayload((current) => ({ ...current, accounts: current.accounts.map((account) => { const update = updates.find((item) => item.accountId === account.id); return update ? { ...account, balanceCents: Number.isFinite(update.balanceCents) ? update.balanceCents : account.balanceCents } : account; }) }));
+    const updates = payload.accounts.map((account) => ({
+      accountId: account.id,
+      balanceCents: Math.round(
+        Number((balanceDrafts[account.id] ?? '').replace(',', '.')) * 100,
+      ),
+    }));
+    setPayload((current) => ({
+      ...current,
+      accounts: current.accounts.map((account) => {
+        const update = updates.find((item) => item.accountId === account.id);
+        return update
+          ? {
+              ...account,
+              balanceCents: Number.isFinite(update.balanceCents)
+                ? update.balanceCents
+                : account.balanceCents,
+            }
+          : account;
+      }),
+    }));
     try {
-      const responses = await Promise.all(updates.map((update) => fetch('/api/finance', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(update) })));
-      setNotice(responses.every((response) => response.ok) ? 'Saldos atualizados no controle compartilhado.' : 'Saldos atualizados nesta sessão. Entre para sincronizar.');
+      const responses = await Promise.all(
+        updates.map((update) =>
+          fetch('/api/finance', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(update),
+          }),
+        ),
+      );
+      setNotice(
+        responses.every((response) => response.ok)
+          ? 'Saldos atualizados no controle compartilhado.'
+          : 'Saldos atualizados nesta sessão. Entre para sincronizar.',
+      );
     } catch {
       setNotice('Saldos atualizados nesta sessão.');
     } finally {
@@ -219,72 +379,1345 @@ export default function Home() {
   async function submitTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
-    const optimistic: Transaction = { id: `local-${Date.now()}`, accountId: form.accountId, type: form.type, description: form.description, category: form.category, amountCents: Math.round(Number(form.amount.replace(',', '.')) * 100), transactionDate: form.transactionDate, direction: form.direction || null, recurring: form.recurring, installment: form.installment || null };
+    const optimistic: Transaction = {
+      id: `local-${Date.now()}`,
+      accountId: form.accountId,
+      type: form.type,
+      description: form.description,
+      category: form.category,
+      amountCents: Math.round(Number(form.amount.replace(',', '.')) * 100),
+      transactionDate: form.transactionDate,
+      direction: form.direction || null,
+      recurring: form.recurring,
+      installment: form.installment || null,
+      receiptName: form.receiptFile?.name ?? null,
+    };
     try {
-      const response = await fetch('/api/finance', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...optimistic, amount: Number(form.amount.replace(',', '.')) }) });
+      const formData = new FormData();
+      formData.append('accountId', form.accountId);
+      formData.append('type', form.type);
+      formData.append('description', form.description);
+      formData.append('category', form.category);
+      formData.append('amount', String(Number(form.amount.replace(',', '.'))));
+      formData.append('transactionDate', form.transactionDate);
+      formData.append('direction', form.direction);
+      formData.append('recurring', String(form.recurring));
+      formData.append('installment', form.installment);
+      if (form.receiptFile)
+        formData.append('receipt', form.receiptFile, form.receiptFile.name);
+      const response = await fetch('/api/finance', {
+        method: 'POST',
+        body: formData,
+      });
       if (response.ok) {
         const saved = (await response.json()) as Transaction;
-        setPayload((current) => ({ ...current, transactions: [saved, ...current.transactions] }));
+        const selectedAccount = payload.accounts.find(
+          (account) => account.id === saved.accountId,
+        );
+        const balanceDelta =
+          saved.type === 'expense'
+            ? selectedAccount?.kind === 'credit_card'
+              ? saved.amountCents
+              : -saved.amountCents
+            : selectedAccount?.kind === 'credit_card'
+              ? -saved.amountCents
+              : saved.amountCents;
+        setPayload((current) => ({
+          ...current,
+          accounts: current.accounts.map((account) =>
+            account.id === saved.accountId
+              ? {
+                  ...account,
+                  balanceCents: account.balanceCents + balanceDelta,
+                }
+              : account,
+          ),
+          transactions: [saved, ...current.transactions],
+        }));
         setNotice('Lançamento salvo no controle compartilhado.');
       } else {
-        setPayload((current) => ({ ...current, transactions: [optimistic, ...current.transactions] }));
-        setNotice('Adicionado nesta sessão. Entre para sincronizar com o banco de dados.');
+        setPayload((current) => ({
+          ...current,
+          transactions: [optimistic, ...current.transactions],
+        }));
+        setNotice(
+          'Adicionado nesta sessão. Entre para sincronizar com o banco de dados.',
+        );
       }
     } catch {
-      setPayload((current) => ({ ...current, transactions: [optimistic, ...current.transactions] }));
+      setPayload((current) => ({
+        ...current,
+        transactions: [optimistic, ...current.transactions],
+      }));
       setNotice('Lançamento adicionado nesta sessão.');
     } finally {
       setIsSubmitting(false);
       setIsComposerOpen(false);
-      setForm((current) => ({ ...current, description: '', amount: '', installment: '', recurring: false }));
+      setForm((current) => ({
+        ...current,
+        description: '',
+        amount: '',
+        installment: '',
+        recurring: false,
+        receiptFile: null,
+        receiptPreviewUrl: '',
+      }));
     }
   }
 
   function renderOverview() {
     const maxCategory = Math.max(...Object.values(categoryTotals), 1);
-    const foodEnd = Math.min((categoryTotals['Alimentação'] ?? 0) / Math.max(totalExpenses, 1) * 360, 360);
-    const transportEnd = Math.min(((categoryTotals['Alimentação'] ?? 0) + (categoryTotals['Transporte'] ?? 0)) / Math.max(totalExpenses, 1) * 360, 360);
-    const balanceFor = (kind: Account['kind'], owner: Account['owner']) => payload.accounts.filter((account) => account.kind === kind && account.owner === owner).reduce((sum, account) => sum + account.balanceCents, 0);
-    const accountFor = (kind: Account['kind'], owner: Account['owner']) => payload.accounts.find((account) => account.kind === kind && account.owner === owner);
-    return <>
-      <section className="welcome-row"><div><p className="eyebrow"><span className="status-dot" /> Controle compartilhado</p><h1>Bom dia, Gui & Fer</h1><p className="muted">Uma visão calma do dinheiro da casa.</p></div><div className="month-switcher" aria-label="Mês selecionado"><CalendarDays size={16} /><span>{monthName}</span><ChevronDown size={15} /></div></section>
-      <section className="balance-cards"><article className="balance-card bank-balance-card"><div className="balance-card-top"><div><div className="hero-label"><Building2 size={17} /> Conta Banco</div><p>Saldo disponível</p></div><strong>{formatMoney(bankBalance)}</strong></div><div className="owner-balance-list"><div><span className="owner-avatar gui-avatar">G</span><span>Gui</span><b>{formatMoney(balanceFor('bank', 'Gui'))}</b></div><div><span className="owner-avatar fer-avatar">F</span><span>Fer</span><b>{formatMoney(balanceFor('bank', 'Fer'))}</b></div></div></article><article className="balance-card flash-balance-card"><div className="balance-card-top"><div><div className="hero-label"><Sparkles size={17} /> Conta Flash</div><p>Saldo disponível</p></div><strong>{formatMoney(flashBalance)}</strong></div><div className="owner-balance-list"><div><span className="owner-avatar gui-avatar">G</span><span>Gui</span><b>{formatMoney(balanceFor('flash', 'Gui'))}</b></div><div><span className="owner-avatar fer-avatar">F</span><span>Fer</span><b>{formatMoney(balanceFor('flash', 'Fer'))}</b></div></div></article></section><div className="invoice-heading"><div><p className="eyebrow">Cartões</p><h2>Faturas abertas</h2></div><span>Por pessoa</span></div><section className="invoice-cards"><article className="invoice-card"><div className="invoice-card-top"><span className="invoice-icon"><CreditCard size={17} /></span><div><h3>Cartão do Gui</h3><small>Fatura aberta</small></div><strong>{formatMoney(balanceFor('credit_card', 'Gui'))}</strong></div><div className="invoice-card-foot"><span>Gui</span><b>{accountFor('credit_card', 'Gui')?.dueDay ? `Vence dia ${accountFor('credit_card', 'Gui')?.dueDay}` : 'Vencimento não definido'}</b></div></article><article className="invoice-card"><div className="invoice-card-top"><span className="invoice-icon fer-invoice-icon"><CreditCard size={17} /></span><div><h3>Cartão da Fer</h3><small>Fatura aberta</small></div><strong>{formatMoney(balanceFor('credit_card', 'Fer'))}</strong></div><div className="invoice-card-foot"><span>Fer</span><b>{accountFor('credit_card', 'Fer')?.dueDay ? `Vence dia ${accountFor('credit_card', 'Fer')?.dueDay}` : 'Vencimento não definido'}</b></div></article></section><div className="available-summary"><CircleDollarSign size={16} /><span>Disponível total da casa</span><b>{formatMoney(available)}</b><small>Banco + Flash, descontando faturas abertas</small></div>
-      <section className="metrics-grid"><article className="metric-card"><div className="metric-top"><span className="icon-bubble mint"><ArrowDownLeft size={17} /></span><span className="metric-trend positive">manual</span></div><p>Entradas no mês</p><strong>{formatMoney(totalIncomes)}</strong><small>Você pode lançar quando quiser</small></article><article className="metric-card"><div className="metric-top"><span className="icon-bubble coral"><ArrowUpRight size={17} /></span><span className="metric-trend neutral">período atual</span></div><p>Gastos no mês</p><strong>{formatMoney(totalExpenses)}</strong><small>{expenses.length} lançamentos</small></article><article className="metric-card accent-card"><div className="metric-top"><span className="icon-bubble purple"><Car size={17} /></span><span className="metric-trend">{uberExpenses.length} viagens</span></div><p>Uber para trabalhar</p><strong>{formatMoney(uberTotal)}</strong><small>ida {formatMoney(uberExpenses.filter((item) => item.direction === 'ida').reduce((sum, item) => sum + item.amountCents, 0))} · volta {formatMoney(uberExpenses.filter((item) => item.direction === 'volta').reduce((sum, item) => sum + item.amountCents, 0))}</small></article></section>
-      <section className="content-grid"><article className="panel spending-panel"><div className="panel-heading"><div><p className="eyebrow">Ritmo do mês</p><h2>Para onde está indo</h2></div><button className="quiet-button" onClick={() => setActiveView('budgets')}>Ver limites <ArrowUpRight size={15} /></button></div><div className="spending-visual"><div className="donut" style={{ background: `conic-gradient(${categoryColor('Alimentação')} 0 ${foodEnd}deg, ${categoryColor('Transporte')} ${foodEnd}deg ${transportEnd}deg, #e7ece9 ${transportEnd}deg 360deg)` }}><div>{formatMoney(totalExpenses)}<small>no mês</small></div></div><div className="legend-list">{Object.entries(categoryTotals).length ? Object.entries(categoryTotals).slice(0, 4).map(([category, value]) => <div className="legend-row" key={category}><span className="legend-dot" style={{ background: categoryColor(category) }} /><span>{category}</span><b>{formatMoney(value)}</b><small>{Math.round((value / Math.max(totalExpenses, 1)) * 100)}%</small></div>) : <div className="empty-copy">Nenhum gasto registrado ainda.<small>Comece pelo botão +</small></div>}</div></div><div className="bar-chart" aria-label="Gastos por categoria"><div className="bar-axis"><span>100%</span><span>50%</span><span>0%</span></div><div className="bars">{Object.entries(categoryTotals).length ? Object.entries(categoryTotals).slice(0, 5).map(([category, value]) => <div className="bar-wrap" key={category}><div className="bar" style={{ height: `${Math.max((value / maxCategory) * 100, 8)}%`, background: categoryColor(category) }} /><small>{category === 'Alimentação' ? 'Alim.' : category.slice(0, 7)}</small></div>) : <span className="chart-empty">Sem dados neste mês</span>}</div></div></article><article className="panel recent-panel"><div className="panel-heading"><div><p className="eyebrow">Movimentações</p><h2>Últimos lançamentos</h2></div><button className="icon-button" aria-label="Mais opções"><MoreHorizontal size={18} /></button></div><div className="transaction-list">{payload.transactions.length ? payload.transactions.slice(0, 5).map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} accounts={payload.accounts} />) : <div className="empty-panel"><span className="empty-icon"><Receipt size={17} /></span><b>Nenhum lançamento ainda</b><small>Registre a primeira despesa ou entrada da casa.</small></div>}</div><button className="full-width-button" onClick={() => setActiveView('transactions')}>Ver todos os lançamentos <ArrowUpRight size={15} /></button></article></section>
-      <section className="bottom-grid"><article className="panel uber-panel"><div className="panel-heading"><div><p className="eyebrow">Transporte</p><h2>Uber do trabalho</h2></div><span className="mini-pill purple-pill"><Car size={14} /> {uberExpenses.length} viagens</span></div><div className="uber-total"><strong>{formatMoney(uberTotal)}</strong><span>no período completo</span></div><div className="direction-grid"><div><span className="direction-icon going"><ArrowUpRight size={15} /></span><small>Idas</small><b>{formatMoney(uberExpenses.filter((item) => item.direction === 'ida').reduce((sum, item) => sum + item.amountCents, 0))}</b></div><div><span className="direction-icon return"><ArrowDownLeft size={15} /></span><small>Voltas</small><b>{formatMoney(uberExpenses.filter((item) => item.direction === 'volta').reduce((sum, item) => sum + item.amountCents, 0))}</b></div><div><span className="direction-icon average"><TrendingUp size={15} /></span><small>Média/viagem</small><b>{formatMoney(uberExpenses.length ? Math.round(uberTotal / uberExpenses.length) : 0)}</b></div></div></article><article className="panel budget-panel"><div className="panel-heading"><div><p className="eyebrow">Organização</p><h2>Limites do mês</h2></div><button className="quiet-button" onClick={() => setActiveView('budgets')}>Gerenciar <ArrowUpRight size={15} /></button></div><div className="budget-list">{budgetProgress.length ? budgetProgress.slice(0, 3).map((budget) => <BudgetRow key={budget.id} budget={budget} />) : <div className="empty-copy">Nenhum limite configurado.<small>Você pode criar por categoria.</small></div>}</div></article></section>
-    </>;
+    const foodEnd = Math.min(
+      ((categoryTotals['Alimentação'] ?? 0) / Math.max(totalExpenses, 1)) * 360,
+      360,
+    );
+    const transportEnd = Math.min(
+      (((categoryTotals['Alimentação'] ?? 0) +
+        (categoryTotals['Transporte'] ?? 0)) /
+        Math.max(totalExpenses, 1)) *
+        360,
+      360,
+    );
+    const balanceFor = (kind: Account['kind'], owner: Account['owner']) =>
+      payload.accounts
+        .filter((account) => account.kind === kind && account.owner === owner)
+        .reduce((sum, account) => sum + account.balanceCents, 0);
+    const accountFor = (kind: Account['kind'], owner: Account['owner']) =>
+      payload.accounts.find(
+        (account) => account.kind === kind && account.owner === owner,
+      );
+    return (
+      <>
+        <section className="welcome-row">
+          <div>
+            <p className="eyebrow">
+              <span className="status-dot" /> Controle compartilhado
+            </p>
+            <h1>Bom dia, Gui & Fer</h1>
+            <p className="muted">Uma visão calma do dinheiro da casa.</p>
+          </div>
+          <div className="month-switcher" aria-label="Mês selecionado">
+            <CalendarDays size={16} />
+            <span>{monthName}</span>
+            <ChevronDown size={15} />
+          </div>
+        </section>
+        <section className="balance-cards">
+          <article className="balance-card bank-balance-card">
+            <div className="balance-card-top">
+              <div>
+                <div className="hero-label">
+                  <Building2 size={17} /> Conta Banco
+                </div>
+                <p>Saldo disponível</p>
+              </div>
+              <strong>{formatMoney(bankBalance)}</strong>
+            </div>
+            <div className="owner-balance-list">
+              <div>
+                <span className="owner-avatar gui-avatar">G</span>
+                <span>Gui</span>
+                <b>{formatMoney(balanceFor('bank', 'Gui'))}</b>
+              </div>
+              <div>
+                <span className="owner-avatar fer-avatar">F</span>
+                <span>Fer</span>
+                <b>{formatMoney(balanceFor('bank', 'Fer'))}</b>
+              </div>
+            </div>
+          </article>
+          <article className="balance-card flash-balance-card">
+            <div className="balance-card-top">
+              <div>
+                <div className="hero-label">
+                  <Sparkles size={17} /> Conta Flash
+                </div>
+                <p>Saldo disponível</p>
+              </div>
+              <strong>{formatMoney(flashBalance)}</strong>
+            </div>
+            <div className="owner-balance-list">
+              <div>
+                <span className="owner-avatar gui-avatar">G</span>
+                <span>Gui</span>
+                <b>{formatMoney(balanceFor('flash', 'Gui'))}</b>
+              </div>
+              <div>
+                <span className="owner-avatar fer-avatar">F</span>
+                <span>Fer</span>
+                <b>{formatMoney(balanceFor('flash', 'Fer'))}</b>
+              </div>
+            </div>
+          </article>
+          <article className="balance-card investment-balance-card">
+            <div className="balance-card-top">
+              <div>
+                <div className="hero-label">
+                  <PiggyBank size={17} /> Investimentos
+                </div>
+                <p>Valor investido</p>
+              </div>
+              <strong>{formatMoney(reserves)}</strong>
+            </div>
+            <div className="owner-balance-list">
+              <div>
+                <span className="owner-avatar gui-avatar">G</span>
+                <span>Gui</span>
+                <b>{formatMoney(balanceFor('reserve', 'Gui'))}</b>
+              </div>
+              <div>
+                <span className="owner-avatar fer-avatar">F</span>
+                <span>Fer</span>
+                <b>{formatMoney(balanceFor('reserve', 'Fer'))}</b>
+              </div>
+            </div>
+          </article>
+        </section>
+        <div className="invoice-heading">
+          <div>
+            <p className="eyebrow">Cartões</p>
+            <h2>Faturas abertas</h2>
+          </div>
+          <span>Por pessoa</span>
+        </div>
+        <section className="invoice-cards">
+          <article className="invoice-card">
+            <div className="invoice-card-top">
+              <span className="invoice-icon">
+                <CreditCard size={17} />
+              </span>
+              <div>
+                <h3>Cartão do Gui</h3>
+                <small>Fatura aberta</small>
+              </div>
+              <strong>{formatMoney(balanceFor('credit_card', 'Gui'))}</strong>
+            </div>
+            <div className="invoice-card-foot">
+              <span>Gui</span>
+              <b>
+                {accountFor('credit_card', 'Gui')?.dueDay
+                  ? `Vence dia ${accountFor('credit_card', 'Gui')?.dueDay}`
+                  : 'Vencimento não definido'}
+              </b>
+            </div>
+          </article>
+          <article className="invoice-card">
+            <div className="invoice-card-top">
+              <span className="invoice-icon fer-invoice-icon">
+                <CreditCard size={17} />
+              </span>
+              <div>
+                <h3>Cartão da Fer</h3>
+                <small>Fatura aberta</small>
+              </div>
+              <strong>{formatMoney(balanceFor('credit_card', 'Fer'))}</strong>
+            </div>
+            <div className="invoice-card-foot">
+              <span>Fer</span>
+              <b>
+                {accountFor('credit_card', 'Fer')?.dueDay
+                  ? `Vence dia ${accountFor('credit_card', 'Fer')?.dueDay}`
+                  : 'Vencimento não definido'}
+              </b>
+            </div>
+          </article>
+        </section>
+        <div className="available-summary">
+          <CircleDollarSign size={16} />
+          <span>Disponível total da casa</span>
+          <b>{formatMoney(available)}</b>
+          <small>Banco + Flash, descontando faturas abertas</small>
+        </div>
+        <section className="metrics-grid">
+          <article className="metric-card">
+            <div className="metric-top">
+              <span className="icon-bubble mint">
+                <ArrowDownLeft size={17} />
+              </span>
+              <span className="metric-trend positive">manual</span>
+            </div>
+            <p>Entradas no mês</p>
+            <strong>{formatMoney(totalIncomes)}</strong>
+            <small>Você pode lançar quando quiser</small>
+          </article>
+          <article className="metric-card">
+            <div className="metric-top">
+              <span className="icon-bubble coral">
+                <ArrowUpRight size={17} />
+              </span>
+              <span className="metric-trend neutral">período atual</span>
+            </div>
+            <p>Gastos no mês</p>
+            <strong>{formatMoney(totalExpenses)}</strong>
+            <small>{expenses.length} lançamentos</small>
+          </article>
+          <article className="metric-card accent-card">
+            <div className="metric-top">
+              <span className="icon-bubble purple">
+                <Car size={17} />
+              </span>
+              <span className="metric-trend">
+                {uberExpenses.length} viagens
+              </span>
+            </div>
+            <p>Uber para trabalhar</p>
+            <strong>{formatMoney(uberTotal)}</strong>
+            <small>
+              ida{' '}
+              {formatMoney(
+                uberExpenses
+                  .filter((item) => item.direction === 'ida')
+                  .reduce((sum, item) => sum + item.amountCents, 0),
+              )}{' '}
+              · volta{' '}
+              {formatMoney(
+                uberExpenses
+                  .filter((item) => item.direction === 'volta')
+                  .reduce((sum, item) => sum + item.amountCents, 0),
+              )}
+            </small>
+          </article>
+        </section>
+        <section className="content-grid">
+          <article className="panel spending-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Ritmo do mês</p>
+                <h2>Para onde está indo</h2>
+              </div>
+              <button
+                className="quiet-button"
+                onClick={() => setActiveView('budgets')}
+              >
+                Ver limites <ArrowUpRight size={15} />
+              </button>
+            </div>
+            <div className="spending-visual">
+              <div
+                className="donut"
+                style={{
+                  background: `conic-gradient(${categoryColor('Alimentação')} 0 ${foodEnd}deg, ${categoryColor('Transporte')} ${foodEnd}deg ${transportEnd}deg, #e7ece9 ${transportEnd}deg 360deg)`,
+                }}
+              >
+                <div>
+                  {formatMoney(totalExpenses)}
+                  <small>no mês</small>
+                </div>
+              </div>
+              <div className="legend-list">
+                {Object.entries(categoryTotals).length ? (
+                  Object.entries(categoryTotals)
+                    .slice(0, 4)
+                    .map(([category, value]) => (
+                      <div className="legend-row" key={category}>
+                        <span
+                          className="legend-dot"
+                          style={{ background: categoryColor(category) }}
+                        />
+                        <span>{category}</span>
+                        <b>{formatMoney(value)}</b>
+                        <small>
+                          {Math.round(
+                            (value / Math.max(totalExpenses, 1)) * 100,
+                          )}
+                          %
+                        </small>
+                      </div>
+                    ))
+                ) : (
+                  <div className="empty-copy">
+                    Nenhum gasto registrado ainda.
+                    <small>Comece pelo botão +</small>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="bar-chart" aria-label="Gastos por categoria">
+              <div className="bar-axis">
+                <span>100%</span>
+                <span>50%</span>
+                <span>0%</span>
+              </div>
+              <div className="bars">
+                {Object.entries(categoryTotals).length ? (
+                  Object.entries(categoryTotals)
+                    .slice(0, 5)
+                    .map(([category, value]) => (
+                      <div className="bar-wrap" key={category}>
+                        <div
+                          className="bar"
+                          style={{
+                            height: `${Math.max((value / maxCategory) * 100, 8)}%`,
+                            background: categoryColor(category),
+                          }}
+                        />
+                        <small>
+                          {category === 'Alimentação'
+                            ? 'Alim.'
+                            : category.slice(0, 7)}
+                        </small>
+                      </div>
+                    ))
+                ) : (
+                  <span className="chart-empty">Sem dados neste mês</span>
+                )}
+              </div>
+            </div>
+          </article>
+          <article className="panel recent-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Movimentações</p>
+                <h2>Últimos lançamentos</h2>
+              </div>
+              <button className="icon-button" aria-label="Mais opções">
+                <MoreHorizontal size={18} />
+              </button>
+            </div>
+            <div className="transaction-list">
+              {payload.transactions.length ? (
+                payload.transactions
+                  .slice(0, 5)
+                  .map((transaction) => (
+                    <TransactionRow
+                      key={transaction.id}
+                      transaction={transaction}
+                      accounts={payload.accounts}
+                    />
+                  ))
+              ) : (
+                <div className="empty-panel">
+                  <span className="empty-icon">
+                    <Receipt size={17} />
+                  </span>
+                  <b>Nenhum lançamento ainda</b>
+                  <small>Registre a primeira despesa ou entrada da casa.</small>
+                </div>
+              )}
+            </div>
+            <button
+              className="full-width-button"
+              onClick={() => setActiveView('transactions')}
+            >
+              Ver todos os lançamentos <ArrowUpRight size={15} />
+            </button>
+          </article>
+        </section>
+        <section className="bottom-grid">
+          <article className="panel uber-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Transporte</p>
+                <h2>Uber do trabalho</h2>
+              </div>
+              <span className="mini-pill purple-pill">
+                <Car size={14} /> {uberExpenses.length} viagens
+              </span>
+            </div>
+            <div className="uber-total">
+              <strong>{formatMoney(uberTotal)}</strong>
+              <span>no período completo</span>
+            </div>
+            <div className="direction-grid">
+              <div>
+                <span className="direction-icon going">
+                  <ArrowUpRight size={15} />
+                </span>
+                <small>Idas</small>
+                <b>
+                  {formatMoney(
+                    uberExpenses
+                      .filter((item) => item.direction === 'ida')
+                      .reduce((sum, item) => sum + item.amountCents, 0),
+                  )}
+                </b>
+              </div>
+              <div>
+                <span className="direction-icon return">
+                  <ArrowDownLeft size={15} />
+                </span>
+                <small>Voltas</small>
+                <b>
+                  {formatMoney(
+                    uberExpenses
+                      .filter((item) => item.direction === 'volta')
+                      .reduce((sum, item) => sum + item.amountCents, 0),
+                  )}
+                </b>
+              </div>
+              <div>
+                <span className="direction-icon average">
+                  <TrendingUp size={15} />
+                </span>
+                <small>Média/viagem</small>
+                <b>
+                  {formatMoney(
+                    uberExpenses.length
+                      ? Math.round(uberTotal / uberExpenses.length)
+                      : 0,
+                  )}
+                </b>
+              </div>
+            </div>
+          </article>
+          <article className="panel budget-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Organização</p>
+                <h2>Limites do mês</h2>
+              </div>
+              <button
+                className="quiet-button"
+                onClick={() => setActiveView('budgets')}
+              >
+                Gerenciar <ArrowUpRight size={15} />
+              </button>
+            </div>
+            <div className="budget-list">
+              {budgetProgress.length ? (
+                budgetProgress
+                  .slice(0, 3)
+                  .map((budget) => (
+                    <BudgetRow key={budget.id} budget={budget} />
+                  ))
+              ) : (
+                <div className="empty-copy">
+                  Nenhum limite configurado.
+                  <small>Você pode criar por categoria.</small>
+                </div>
+              )}
+            </div>
+          </article>
+        </section>
+      </>
+    );
   }
 
   function renderTransactions() {
-    return <section className="page-section"><div className="page-heading"><div><p className="eyebrow">Histórico compartilhado</p><h1>Todos os lançamentos</h1><p className="muted">Entradas, despesas recorrentes e o dia a dia da casa.</p></div><button className="primary-button" onClick={() => setIsComposerOpen(true)}><Plus size={17} /> Novo lançamento</button></div><div className="toolbar"><div className="segmented"><button className={filter === 'Todos' ? 'active' : ''} onClick={() => setFilter('Todos')}>Todos</button><button className={filter === 'Expense' ? 'active' : ''} onClick={() => setFilter('Expense')}>Despesas</button><button className={filter === 'Income' ? 'active' : ''} onClick={() => setFilter('Income')}>Entradas</button></div><button className="filter-button"><SlidersHorizontal size={15} /> Filtrar <ChevronDown size={14} /></button></div><div className="panel table-panel"><div className="transaction-table-head"><span>Descrição</span><span>Categoria</span><span>Conta</span><span>Data</span><span>Valor</span></div>{filteredTransactions.length ? filteredTransactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} accounts={payload.accounts} detailed />) : <div className="empty-panel"><span className="empty-icon"><List size={17} /></span><b>Nada por aqui ainda</b><small>Adicione um lançamento para começar a acompanhar o mês.</small></div>}</div></section>;
+    return (
+      <section className="page-section">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Histórico compartilhado</p>
+            <h1>Todos os lançamentos</h1>
+            <p className="muted">
+              Entradas, despesas recorrentes e o dia a dia da casa.
+            </p>
+          </div>
+          <button
+            className="primary-button"
+            onClick={() => setIsComposerOpen(true)}
+          >
+            <Plus size={17} /> Novo lançamento
+          </button>
+        </div>
+        <div className="toolbar">
+          <div className="segmented">
+            <button
+              className={filter === 'Todos' ? 'active' : ''}
+              onClick={() => setFilter('Todos')}
+            >
+              Todos
+            </button>
+            <button
+              className={filter === 'Expense' ? 'active' : ''}
+              onClick={() => setFilter('Expense')}
+            >
+              Despesas
+            </button>
+            <button
+              className={filter === 'Income' ? 'active' : ''}
+              onClick={() => setFilter('Income')}
+            >
+              Entradas
+            </button>
+          </div>
+          <button className="filter-button">
+            <SlidersHorizontal size={15} /> Filtrar <ChevronDown size={14} />
+          </button>
+        </div>
+        <div className="panel table-panel">
+          <div className="transaction-table-head">
+            <span>Descrição</span>
+            <span>Categoria</span>
+            <span>Conta</span>
+            <span>Data</span>
+            <span>Valor</span>
+          </div>
+          {filteredTransactions.length ? (
+            filteredTransactions.map((transaction) => (
+              <TransactionRow
+                key={transaction.id}
+                transaction={transaction}
+                accounts={payload.accounts}
+                detailed
+              />
+            ))
+          ) : (
+            <div className="empty-panel">
+              <span className="empty-icon">
+                <List size={17} />
+              </span>
+              <b>Nada por aqui ainda</b>
+              <small>
+                Adicione um lançamento para começar a acompanhar o mês.
+              </small>
+            </div>
+          )}
+        </div>
+      </section>
+    );
   }
 
   function renderAccounts() {
-    const groups = [{ key: 'bank', title: 'Contas bancárias', copy: 'Saldos informados manualmente' }, { key: 'credit_card', title: 'Cartões de crédito', copy: 'Faturas abertas e vencimentos' }, { key: 'flash', title: 'Flash', copy: 'Benefícios por pessoa' }, { key: 'reserve', title: 'Reservas', copy: 'Dinheiro guardado' }] as const;
-    return <section className="page-section"><div className="page-heading"><div><p className="eyebrow">Patrimônio da casa</p><h1>Contas e cartões</h1><p className="muted">Cada pessoa tem suas contas; a visão continua sendo uma só.</p></div><button className="secondary-button" onClick={openBalanceEditor}><Settings size={16} /> Ajustar saldos</button></div><div className="account-summary"><div><span>Saldo do banco</span><strong>{formatMoney(bankBalance)}</strong></div><div><span>Saldo do Flash</span><strong>{formatMoney(flashBalance)}</strong></div><div><span>Disponível total</span><strong>{formatMoney(available)}</strong></div><div><span>Em reservas</span><strong>{formatMoney(reserves)}</strong></div><div><span>Faturas abertas</span><strong>{formatMoney(cardBalance)}</strong></div></div>{groups.map((group) => <div className="account-group" key={group.key}><div className="group-heading"><div><h2>{group.title}</h2><p>{group.copy}</p></div><button className="icon-button"><Plus size={17} /></button></div><div className="accounts-grid">{payload.accounts.filter((account) => account.kind === group.key).map((account) => <AccountCard key={account.id} account={account} />)}</div></div>)}</section>;
+    const groups = [
+      {
+        key: 'bank',
+        title: 'Contas bancárias',
+        copy: 'Saldos informados manualmente',
+      },
+      {
+        key: 'credit_card',
+        title: 'Cartões de crédito',
+        copy: 'Faturas abertas e vencimentos',
+      },
+      { key: 'flash', title: 'Flash', copy: 'Benefícios por pessoa' },
+      {
+        key: 'reserve',
+        title: 'Investimentos',
+        copy: 'Valor informado manualmente',
+      },
+    ] as const;
+    return (
+      <section className="page-section">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Patrimônio da casa</p>
+            <h1>Contas e cartões</h1>
+            <p className="muted">
+              Cada pessoa tem suas contas; a visão continua sendo uma só.
+            </p>
+          </div>
+          <button className="secondary-button" onClick={openBalanceEditor}>
+            <Settings size={16} /> Ajustar saldos
+          </button>
+        </div>
+        <div className="account-summary">
+          <div>
+            <span>Saldo do banco</span>
+            <strong>{formatMoney(bankBalance)}</strong>
+          </div>
+          <div>
+            <span>Saldo do Flash</span>
+            <strong>{formatMoney(flashBalance)}</strong>
+          </div>
+          <div>
+            <span>Disponível total</span>
+            <strong>{formatMoney(available)}</strong>
+          </div>
+          <div>
+            <span>Investimentos</span>
+            <strong>{formatMoney(reserves)}</strong>
+          </div>
+          <div>
+            <span>Faturas abertas</span>
+            <strong>{formatMoney(cardBalance)}</strong>
+          </div>
+        </div>
+        {groups.map((group) => (
+          <div className="account-group" key={group.key}>
+            <div className="group-heading">
+              <div>
+                <h2>{group.title}</h2>
+                <p>{group.copy}</p>
+              </div>
+              <button className="icon-button">
+                <Plus size={17} />
+              </button>
+            </div>
+            <div className="accounts-grid">
+              {payload.accounts
+                .filter((account) => account.kind === group.key)
+                .map((account) => (
+                  <AccountCard key={account.id} account={account} />
+                ))}
+            </div>
+          </div>
+        ))}
+      </section>
+    );
   }
 
   function renderBudgets() {
-    return <section className="page-section"><div className="page-heading"><div><p className="eyebrow">Plano do mês</p><h1>Limites por categoria</h1><p className="muted">Defina um teto que ajude, sem transformar a casa em uma planilha.</p></div><button className="secondary-button"><Plus size={16} /> Novo limite</button></div><div className="limits-highlight"><div><span>Gasto total no mês</span><strong>{formatMoney(totalExpenses)}</strong></div><div className="limit-copy"><Sparkles size={17} /><p>Você está usando <b>{totalIncomes ? Math.round((totalExpenses / totalIncomes) * 100) : 0}%</b> das entradas deste mês.</p></div></div><div className="budget-grid">{budgetProgress.length ? budgetProgress.map((budget) => <div className="limit-card" key={budget.id}><div className="limit-card-head"><span className="category-dot" style={{ background: categoryColor(budget.category) }} /><div><h2>{budget.category}</h2><p>{formatMoney(budget.spentCents)} de {formatMoney(budget.limitCents)}</p></div><button className="icon-button"><MoreHorizontal size={17} /></button></div><div className="progress-track"><span style={{ width: `${Math.min(budget.percent, 100)}%`, background: categoryColor(budget.category) }} /></div><div className="limit-foot"><span>{budget.percent}% usado</span><b>{budget.percent > 85 ? 'Atenção ao ritmo' : 'Dentro do combinado'}</b></div></div>) : <div className="empty-panel wide-empty"><span className="empty-icon"><SlidersHorizontal size={17} /></span><b>Nenhum limite configurado</b><small>Crie limites por categoria quando definirem os valores da casa.</small></div>}</div></section>;
+    return (
+      <section className="page-section">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Plano do mês</p>
+            <h1>Limites por categoria</h1>
+            <p className="muted">
+              Defina um teto que ajude, sem transformar a casa em uma planilha.
+            </p>
+          </div>
+          <button className="secondary-button">
+            <Plus size={16} /> Novo limite
+          </button>
+        </div>
+        <div className="limits-highlight">
+          <div>
+            <span>Gasto total no mês</span>
+            <strong>{formatMoney(totalExpenses)}</strong>
+          </div>
+          <div className="limit-copy">
+            <Sparkles size={17} />
+            <p>
+              Você está usando{' '}
+              <b>
+                {totalIncomes
+                  ? Math.round((totalExpenses / totalIncomes) * 100)
+                  : 0}
+                %
+              </b>{' '}
+              das entradas deste mês.
+            </p>
+          </div>
+        </div>
+        <div className="budget-grid">
+          {budgetProgress.length ? (
+            budgetProgress.map((budget) => (
+              <div className="limit-card" key={budget.id}>
+                <div className="limit-card-head">
+                  <span
+                    className="category-dot"
+                    style={{ background: categoryColor(budget.category) }}
+                  />
+                  <div>
+                    <h2>{budget.category}</h2>
+                    <p>
+                      {formatMoney(budget.spentCents)} de{' '}
+                      {formatMoney(budget.limitCents)}
+                    </p>
+                  </div>
+                  <button className="icon-button">
+                    <MoreHorizontal size={17} />
+                  </button>
+                </div>
+                <div className="progress-track">
+                  <span
+                    style={{
+                      width: `${Math.min(budget.percent, 100)}%`,
+                      background: categoryColor(budget.category),
+                    }}
+                  />
+                </div>
+                <div className="limit-foot">
+                  <span>{budget.percent}% usado</span>
+                  <b>
+                    {budget.percent > 85
+                      ? 'Atenção ao ritmo'
+                      : 'Dentro do combinado'}
+                  </b>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-panel wide-empty">
+              <span className="empty-icon">
+                <SlidersHorizontal size={17} />
+              </span>
+              <b>Nenhum limite configurado</b>
+              <small>
+                Crie limites por categoria quando definirem os valores da casa.
+              </small>
+            </div>
+          )}
+        </div>
+      </section>
+    );
   }
 
-  if (isLoading || accessState === 'checking') return <div className="loading-state"><div className="loading-orb" /><p>Carregando o controle da casa…</p></div>;
+  if (isLoading || accessState === 'checking')
+    return (
+      <div className="loading-state">
+        <div className="loading-orb" />
+        <p>Carregando o controle da casa…</p>
+      </div>
+    );
   if (accessState === 'anonymous') return <SignInGate />;
-  if (accessState === 'error') return <main className="access-gate"><div className="access-card"><span className="access-mark"><CircleDollarSign size={23} /></span><p className="eyebrow">Nossa casa · finanças a dois</p><h1>Não foi possível carregar</h1><p>Tente atualizar a página. Seus dados continuam protegidos e não são exibidos sem uma conexão válida.</p><button className="primary-button access-button" onClick={() => window.location.reload()}>Tentar novamente <ArrowUpRight size={16} /></button></div></main>;
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand-mark"><CircleDollarSign size={19} /></span><div><b>nossa casa</b><span>finanças a dois</span></div></div><div className="household-switcher"><span className="household-avatar">G<span>F</span></span><div><small>Casa do Gui & Fer</small><b>Visão compartilhada</b></div><ChevronDown size={15} /></div><nav className="main-nav" aria-label="Navegação principal">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? 'active' : ''} onClick={() => setActiveView(item.id)}><Icon size={17} /><span>{item.label}</span></button>; })}</nav><div className="sidebar-footer"><button><Repeat2 size={17} /><span>Recorrentes</span></button><button><Settings size={17} /><span>Configurações</span></button><div className="profile-row"><div className="profile-avatar">{initials(payload.currentUser.displayName || 'GF')}</div><div><b>{payload.currentUser.displayName || 'Gui & Fer'}</b><small>Conta conectada</small></div><MoreHorizontal size={17} /></div></div></aside><main className="main-content"><header className="topbar"><div className="mobile-brand"><span className="brand-mark"><CircleDollarSign size={18} /></span><b>nossa casa</b></div><div className="topbar-spacer" /><button className="topbar-icon" aria-label="Notificações"><Bell size={18} /><i /></button><div className="topbar-user"><div className="couple-avatars"><span>G</span><span>F</span></div><span>Gui & Fer</span><ChevronDown size={14} /></div></header><div className="content-wrap">{activeView === 'overview' ? renderOverview() : activeView === 'transactions' ? renderTransactions() : activeView === 'accounts' ? renderAccounts() : renderBudgets()}</div></main><button className="floating-add" onClick={() => setIsComposerOpen(true)} aria-label="Novo lançamento"><Plus size={22} /></button><nav className="mobile-nav" aria-label="Navegação móvel">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? 'active' : ''} onClick={() => setActiveView(item.id)}><Icon size={18} /><span>{item.label.split(' ')[0]}</span></button>; })}</nav>{notice && <div className="toast"><Check size={16} /><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Fechar aviso"><X size={14} /></button></div>}{isBalanceEditorOpen && <div className="modal-backdrop" onMouseDown={() => setIsBalanceEditorOpen(false)}><div className="composer balance-editor" onMouseDown={(event) => event.stopPropagation()}><div className="composer-head"><div><p className="eyebrow">Saldos manuais</p><h2>Atualizar saldos</h2></div><button className="icon-button" onClick={() => setIsBalanceEditorOpen(false)}><X size={18} /></button></div><p className="balance-note">Use esta tela para reconciliar o app com o saldo real de cada conta.</p><div className="balance-list">{payload.accounts.map((account) => <label className="balance-row" key={account.id}><span><b>{account.name}</b><small>{account.owner} · {account.kind === 'credit_card' ? 'fatura aberta' : account.kind === 'reserve' ? 'reserva' : 'saldo disponível'}</small></span><input inputMode="decimal" value={balanceDrafts[account.id] ?? ''} onChange={(event) => setBalanceDrafts((current) => ({ ...current, [account.id]: event.target.value }))} /></label>)}</div><button className="primary-button form-submit" onClick={saveBalances} disabled={isSavingBalances}>{isSavingBalances ? 'Salvando…' : 'Salvar saldos'} <Check size={16} /></button></div></div>}{isComposerOpen && <div className="modal-backdrop" onMouseDown={() => setIsComposerOpen(false)}><div className="composer" onMouseDown={(event) => event.stopPropagation()}><div className="composer-head"><div><p className="eyebrow">Novo registro</p><h2>Adicionar lançamento</h2></div><button className="icon-button" onClick={() => setIsComposerOpen(false)}><X size={18} /></button></div><form onSubmit={submitTransaction}><div className="type-toggle"><button type="button" className={form.type === 'expense' ? 'active expense' : ''} onClick={() => setForm((current) => ({ ...current, type: 'expense' }))}><ArrowUpRight size={16} /> Despesa</button><button type="button" className={form.type === 'income' ? 'active income' : ''} onClick={() => setForm((current) => ({ ...current, type: 'income' }))}><ArrowDownLeft size={16} /> Entrada</button></div><label>Descrição<input required value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder={form.type === 'expense' ? 'Ex.: Uber para o trabalho' : 'Ex.: entrada mensal'} /></label><div className="form-grid"><label>Valor<input required inputMode="decimal" value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} placeholder="R$ 0,00" /></label><label>Data<input required type="date" value={form.transactionDate} onChange={(event) => setForm((current) => ({ ...current, transactionDate: event.target.value }))} /></label></div><div className="form-grid"><label>Categoria<select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}>{categories.filter((category) => form.type === 'income' ? category.name === 'Salário' || category.name === 'Outros' : category.name !== 'Salário').map((category) => <option key={category.name}>{category.name}</option>)}</select></label><label>Conta<select required value={form.accountId} onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}>{payload.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label></div>{form.category === 'Transporte' && <label>Trajeto<select value={form.direction} onChange={(event) => setForm((current) => ({ ...current, direction: event.target.value as FormState['direction'] }))}><option value="">Não especificar</option><option value="ida">Ida</option><option value="volta">Volta</option></select></label>}<div className="form-options"><label className="check-label"><input type="checkbox" checked={form.recurring} onChange={(event) => setForm((current) => ({ ...current, recurring: event.target.checked }))} /><span><Repeat2 size={14} /> Lançamento recorrente</span></label><input className="installment-input" value={form.installment} onChange={(event) => setForm((current) => ({ ...current, installment: event.target.value }))} placeholder="Parcela (ex.: 2/10)" /></div><button className="primary-button form-submit" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar lançamento'} <ArrowUpRight size={16} /></button></form></div></div>}</div>;
+  if (accessState === 'error')
+    return (
+      <main className="access-gate">
+        <div className="access-card">
+          <span className="access-mark">
+            <CircleDollarSign size={23} />
+          </span>
+          <p className="eyebrow">Nossa casa · finanças a dois</p>
+          <h1>Não foi possível carregar</h1>
+          <p>
+            Tente atualizar a página. Seus dados continuam protegidos e não são
+            exibidos sem uma conexão válida.
+          </p>
+          <button
+            className="primary-button access-button"
+            onClick={() => window.location.reload()}
+          >
+            Tentar novamente <ArrowUpRight size={16} />
+          </button>
+        </div>
+      </main>
+    );
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">
+            <CircleDollarSign size={19} />
+          </span>
+          <div>
+            <b>nossa casa</b>
+            <span>finanças a dois</span>
+          </div>
+        </div>
+        <div className="household-switcher">
+          <span className="household-avatar">
+            G<span>F</span>
+          </span>
+          <div>
+            <small>Casa do Gui & Fer</small>
+            <b>Visão compartilhada</b>
+          </div>
+          <ChevronDown size={15} />
+        </div>
+        <nav className="main-nav" aria-label="Navegação principal">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={activeView === item.id ? 'active' : ''}
+                onClick={() => setActiveView(item.id)}
+              >
+                <Icon size={17} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="sidebar-footer">
+          <button>
+            <Repeat2 size={17} />
+            <span>Recorrentes</span>
+          </button>
+          <button>
+            <Settings size={17} />
+            <span>Configurações</span>
+          </button>
+          <div className="profile-row">
+            <div className="profile-avatar">
+              {initials(payload.currentUser.displayName || 'GF')}
+            </div>
+            <div>
+              <b>{payload.currentUser.displayName || 'Gui & Fer'}</b>
+              <small>Conta conectada</small>
+            </div>
+            <MoreHorizontal size={17} />
+          </div>
+        </div>
+      </aside>
+      <main className="main-content">
+        <header className="topbar">
+          <div className="mobile-brand">
+            <span className="brand-mark">
+              <CircleDollarSign size={18} />
+            </span>
+            <b>nossa casa</b>
+          </div>
+          <div className="topbar-spacer" />
+          <button className="topbar-icon" aria-label="Notificações">
+            <Bell size={18} />
+            <i />
+          </button>
+          <div className="topbar-user">
+            <div className="couple-avatars">
+              <span>G</span>
+              <span>F</span>
+            </div>
+            <span>Gui & Fer</span>
+            <ChevronDown size={14} />
+          </div>
+        </header>
+        <div className="content-wrap">
+          {activeView === 'overview'
+            ? renderOverview()
+            : activeView === 'transactions'
+              ? renderTransactions()
+              : activeView === 'accounts'
+                ? renderAccounts()
+                : renderBudgets()}
+        </div>
+      </main>
+      <button
+        className="floating-add"
+        onClick={() => setIsComposerOpen(true)}
+        aria-label="Novo lançamento"
+      >
+        <Plus size={22} />
+      </button>
+      <nav className="mobile-nav" aria-label="Navegação móvel">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              className={activeView === item.id ? 'active' : ''}
+              onClick={() => setActiveView(item.id)}
+            >
+              <Icon size={18} />
+              <span>{item.label.split(' ')[0]}</span>
+            </button>
+          );
+        })}
+      </nav>
+      {notice && (
+        <div className="toast">
+          <Check size={16} />
+          <span>{notice}</span>
+          <button onClick={() => setNotice('')} aria-label="Fechar aviso">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {isBalanceEditorOpen && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => setIsBalanceEditorOpen(false)}
+        >
+          <div
+            className="composer balance-editor"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="composer-head">
+              <div>
+                <p className="eyebrow">Saldos manuais</p>
+                <h2>Atualizar saldos</h2>
+              </div>
+              <button
+                className="icon-button"
+                onClick={() => setIsBalanceEditorOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="balance-note">
+              Use esta tela para reconciliar o app com o saldo real de cada
+              conta.
+            </p>
+            <div className="balance-list">
+              {payload.accounts.map((account) => (
+                <label className="balance-row" key={account.id}>
+                  <span>
+                    <b>{account.name}</b>
+                    <small>
+                      {account.owner} ·{' '}
+                      {account.kind === 'credit_card'
+                        ? 'fatura aberta'
+                        : account.kind === 'reserve'
+                          ? 'reserva'
+                          : 'saldo disponível'}
+                    </small>
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={balanceDrafts[account.id] ?? ''}
+                    onChange={(event) =>
+                      setBalanceDrafts((current) => ({
+                        ...current,
+                        [account.id]: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <button
+              className="primary-button form-submit"
+              onClick={saveBalances}
+              disabled={isSavingBalances}
+            >
+              {isSavingBalances ? 'Salvando…' : 'Salvar saldos'}{' '}
+              <Check size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+      {isComposerOpen && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => setIsComposerOpen(false)}
+        >
+          <div
+            className="composer"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="composer-head">
+              <div>
+                <p className="eyebrow">Novo registro</p>
+                <h2>Adicionar lançamento</h2>
+              </div>
+              <button
+                className="icon-button"
+                onClick={() => setIsComposerOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={submitTransaction}>
+              <div className="type-toggle">
+                <button
+                  type="button"
+                  className={form.type === 'expense' ? 'active expense' : ''}
+                  onClick={() =>
+                    setForm((current) => ({ ...current, type: 'expense' }))
+                  }
+                >
+                  <ArrowUpRight size={16} /> Despesa
+                </button>
+                <button
+                  type="button"
+                  className={form.type === 'income' ? 'active income' : ''}
+                  onClick={() =>
+                    setForm((current) => ({ ...current, type: 'income' }))
+                  }
+                >
+                  <ArrowDownLeft size={16} /> Entrada
+                </button>
+              </div>
+              <label>
+                Descrição
+                <input
+                  required
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  placeholder={
+                    form.type === 'expense'
+                      ? 'Ex.: Uber para o trabalho'
+                      : 'Ex.: entrada mensal'
+                  }
+                />
+              </label>
+              <div className="form-grid">
+                <label>
+                  Valor
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={form.amount}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        amount: event.target.value,
+                      }))
+                    }
+                    placeholder="R$ 0,00"
+                  />
+                </label>
+                <label>
+                  Data
+                  <input
+                    required
+                    type="date"
+                    value={form.transactionDate}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        transactionDate: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Categoria
+                  <select
+                    value={form.category}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        category: event.target.value,
+                      }))
+                    }
+                  >
+                    {categories
+                      .filter((category) =>
+                        form.type === 'income'
+                          ? category.name === 'Salário' ||
+                            category.name === 'Outros'
+                          : category.name !== 'Salário',
+                      )
+                      .map((category) => (
+                        <option key={category.name}>{category.name}</option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Conta
+                  <select
+                    required
+                    value={form.accountId}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        accountId: event.target.value,
+                      }))
+                    }
+                  >
+                    {payload.accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {form.category === 'Transporte' && (
+                <label>
+                  Trajeto
+                  <select
+                    value={form.direction}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        direction: event.target.value as FormState['direction'],
+                      }))
+                    }
+                  >
+                    <option value="">Não especificar</option>
+                    <option value="ida">Ida</option>
+                    <option value="volta">Volta</option>
+                  </select>
+                </label>
+              )}
+              <label className="receipt-upload">
+                Foto da nota
+                <span className="receipt-upload-control">
+                  <ImageIcon size={16} />
+                  <span>
+                    {form.receiptFile?.name ?? 'Tirar ou escolher foto'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setForm((current) => ({
+                        ...current,
+                        receiptFile: file,
+                        receiptPreviewUrl: file
+                          ? URL.createObjectURL(file)
+                          : '',
+                      }));
+                    }}
+                  />
+                </span>
+                {form.receiptPreviewUrl && (
+                  <img
+                    className="receipt-preview"
+                    src={form.receiptPreviewUrl}
+                    alt="Pré-visualização da nota"
+                  />
+                )}
+              </label>
+              <div className="form-options">
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={form.recurring}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        recurring: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    <Repeat2 size={14} /> Lançamento recorrente
+                  </span>
+                </label>
+                <input
+                  className="installment-input"
+                  value={form.installment}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      installment: event.target.value,
+                    }))
+                  }
+                  placeholder="Parcela (ex.: 2/10)"
+                />
+              </div>
+              <button
+                className="primary-button form-submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Salvando…' : 'Salvar lançamento'}{' '}
+                <ArrowUpRight size={16} />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function TransactionRow({ transaction, accounts, detailed = false }: { transaction: Transaction; accounts: Account[]; detailed?: boolean }) {
+function TransactionRow({
+  transaction,
+  accounts,
+  detailed = false,
+}: {
+  transaction: Transaction;
+  accounts: Account[];
+  detailed?: boolean;
+}) {
   const account = accounts.find((item) => item.id === transaction.accountId);
-  return <div className={detailed ? 'transaction-row detailed' : 'transaction-row'}><div className="transaction-main"><span className="transaction-icon" style={{ background: `${categoryColor(transaction.category)}18`, color: categoryColor(transaction.category) }}>{transaction.category === 'Transporte' ? <Car size={16} /> : transaction.category === 'Salário' ? <TrendingUp size={16} /> : transaction.category === 'Moradia' ? <HomeIcon size={16} /> : <Receipt size={16} />}</span><div><b>{transaction.description}</b><small>{transaction.direction ? `${transaction.direction === 'ida' ? 'Ida' : 'Volta'} · ` : ''}{transaction.recurring ? 'Recorrente · ' : ''}{transaction.category}</small></div></div>{detailed && <span className="transaction-category"><span className="legend-dot" style={{ background: categoryColor(transaction.category) }} />{transaction.category}</span>}<span className="transaction-account">{account?.name ?? 'Conta'}</span><span className="transaction-date">{formatDate(transaction.transactionDate)}</span><strong className={transaction.type === 'income' ? 'income-text' : 'expense-text'}>{transaction.type === 'income' ? '+' : '-'} {formatMoney(transaction.amountCents)}</strong></div>;
+  return (
+    <div className={detailed ? 'transaction-row detailed' : 'transaction-row'}>
+      <div className="transaction-main">
+        <span
+          className="transaction-icon"
+          style={{
+            background: `${categoryColor(transaction.category)}18`,
+            color: categoryColor(transaction.category),
+          }}
+        >
+          {transaction.category === 'Transporte' ? (
+            <Car size={16} />
+          ) : transaction.category === 'Salário' ? (
+            <TrendingUp size={16} />
+          ) : transaction.category === 'Moradia' ? (
+            <HomeIcon size={16} />
+          ) : (
+            <Receipt size={16} />
+          )}
+        </span>
+        <div>
+          <b>{transaction.description}</b>
+          <small>
+            {transaction.direction
+              ? `${transaction.direction === 'ida' ? 'Ida' : 'Volta'} · `
+              : ''}
+            {transaction.recurring ? 'Recorrente · ' : ''}
+            {transaction.category}
+            {transaction.receiptKey && (
+              <a
+                className="receipt-link"
+                href={`/api/finance?receipt=${encodeURIComponent(transaction.receiptKey)}`}
+                target="_blank"
+                rel="noreferrer"
+                title={transaction.receiptName ?? 'Abrir foto da nota'}
+              >
+                <ImageIcon size={12} /> Nota
+              </a>
+            )}
+          </small>
+        </div>
+      </div>
+      {detailed && (
+        <span className="transaction-category">
+          <span
+            className="legend-dot"
+            style={{ background: categoryColor(transaction.category) }}
+          />
+          {transaction.category}
+        </span>
+      )}
+      <span className="transaction-account">{account?.name ?? 'Conta'}</span>
+      <span className="transaction-date">
+        {formatDate(transaction.transactionDate)}
+      </span>
+      <strong
+        className={
+          transaction.type === 'income' ? 'income-text' : 'expense-text'
+        }
+      >
+        {transaction.type === 'income' ? '+' : '-'}{' '}
+        {formatMoney(transaction.amountCents)}
+      </strong>
+    </div>
+  );
 }
 
 function AccountCard({ account }: { account: Account }) {
   const Icon = accountIcon(account.kind);
   const isCard = account.kind === 'credit_card';
-  return <article className={`account-card ${isCard ? 'card-account' : ''}`}><div className="account-card-head"><span className="account-icon"><Icon size={17} /></span><span className="owner-chip">{account.owner}</span></div><h3>{account.name}</h3><strong>{formatMoney(account.balanceCents)}</strong><p>{isCard ? account.dueDay ? `Vence dia ${account.dueDay}` : 'Vencimento não definido' : account.kind === 'reserve' ? 'Saldo reservado' : 'Saldo atual'}</p>{isCard && <div className="card-due"><CalendarDays size={14} /> {account.closingDay ? `Fecha dia ${account.closingDay}` : 'Fechamento não definido'}</div>}</article>;
+  return (
+    <article className={`account-card ${isCard ? 'card-account' : ''}`}>
+      <div className="account-card-head">
+        <span className="account-icon">
+          <Icon size={17} />
+        </span>
+        <span className="owner-chip">{account.owner}</span>
+      </div>
+      <h3>{account.name}</h3>
+      <strong>{formatMoney(account.balanceCents)}</strong>
+      <p>
+        {isCard
+          ? account.dueDay
+            ? `Vence dia ${account.dueDay}`
+            : 'Vencimento não definido'
+          : account.kind === 'reserve'
+            ? 'Saldo reservado'
+            : 'Saldo atual'}
+      </p>
+      {isCard && (
+        <div className="card-due">
+          <CalendarDays size={14} />{' '}
+          {account.closingDay
+            ? `Fecha dia ${account.closingDay}`
+            : 'Fechamento não definido'}
+        </div>
+      )}
+    </article>
+  );
 }
 
-function BudgetRow({ budget }: { budget: { category: string; spentCents: number; limitCents: number; percent: number } }) {
-  return <div className="budget-row"><div className="budget-row-top"><span className="legend-dot" style={{ background: categoryColor(budget.category) }} /><b>{budget.category}</b><small>{formatMoney(budget.spentCents)} / {formatMoney(budget.limitCents)}</small></div><div className="progress-track"><span style={{ width: `${Math.min(budget.percent, 100)}%`, background: categoryColor(budget.category) }} /></div></div>;
+function BudgetRow({
+  budget,
+}: {
+  budget: {
+    category: string;
+    spentCents: number;
+    limitCents: number;
+    percent: number;
+  };
+}) {
+  return (
+    <div className="budget-row">
+      <div className="budget-row-top">
+        <span
+          className="legend-dot"
+          style={{ background: categoryColor(budget.category) }}
+        />
+        <b>{budget.category}</b>
+        <small>
+          {formatMoney(budget.spentCents)} / {formatMoney(budget.limitCents)}
+        </small>
+      </div>
+      <div className="progress-track">
+        <span
+          style={{
+            width: `${Math.min(budget.percent, 100)}%`,
+            background: categoryColor(budget.category),
+          }}
+        />
+      </div>
+    </div>
+  );
 }

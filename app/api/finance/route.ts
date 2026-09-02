@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 type FinanceUser = { userId: string; displayName: string; email: string };
 type DemoAccount = { id: string; name: string; kind: string; owner: string; balanceCents: number; closingDay: number | null; dueDay: number | null };
-type DemoTransaction = { id: string; accountId: string; type: 'income' | 'expense'; description: string; category: string; amountCents: number; transactionDate: string; direction: 'ida' | 'volta' | null; recurring: boolean; installment: string | null };
+type DemoTransaction = { id: string; accountId: string; type: 'income' | 'expense'; description: string; category: string; amountCents: number; transactionDate: string; direction: 'ida' | 'volta' | null; recurring: boolean; installment: string | null; receiptKey?: string | null; receiptName?: string | null; receiptContentType?: string | null };
 
 const householdId = 'household-main';
 const nowIso = () => new Date().toISOString();
@@ -50,11 +50,18 @@ async function ensureSchema() {
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, user_id TEXT NOT NULL, email TEXT NOT NULL, display_name TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(household_id, user_id))`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, owner TEXT NOT NULL, balance_cents INTEGER NOT NULL DEFAULT 0, closing_day INTEGER, due_day INTEGER, created_at TEXT NOT NULL)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL)`),
-    env.DB.prepare(`CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, account_id TEXT NOT NULL, user_id TEXT NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, amount_cents INTEGER NOT NULL, transaction_date TEXT NOT NULL, direction TEXT, recurring INTEGER NOT NULL DEFAULT 0, installment TEXT, created_at TEXT NOT NULL)`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, account_id TEXT NOT NULL, user_id TEXT NOT NULL, type TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, amount_cents INTEGER NOT NULL, transaction_date TEXT NOT NULL, direction TEXT, recurring INTEGER NOT NULL DEFAULT 0, installment TEXT, receipt_key TEXT, receipt_name TEXT, receipt_content_type TEXT, created_at TEXT NOT NULL)`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS budgets (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, category TEXT NOT NULL, month TEXT NOT NULL, limit_cents INTEGER NOT NULL, UNIQUE(household_id, category, month))`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_household_date ON transactions(household_id, transaction_date)`),
     env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_household_category ON transactions(household_id, category)`),
   ]);
+  for (const statement of [
+    `ALTER TABLE transactions ADD COLUMN receipt_key TEXT`,
+    `ALTER TABLE transactions ADD COLUMN receipt_name TEXT`,
+    `ALTER TABLE transactions ADD COLUMN receipt_content_type TEXT`,
+  ]) {
+    try { await env.DB.prepare(statement).run(); } catch { /* Columns already exist. */ }
+  }
 }
 
 async function ensureHousehold(user: FinanceUser) {
@@ -105,17 +112,25 @@ async function seedHousehold(userId: string) {
   await env.DB.batch(statements);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const identity = await getChatGPTUser();
   if (!identity) return NextResponse.json({ error: 'É necessário entrar na sua conta para visualizar este controle.' }, { status: 401 });
   if (!env.DB) return NextResponse.json({ error: 'O banco de dados ainda não está disponível.' }, { status: 503 });
   const user = { userId: identity.userId, displayName: identity.displayName, email: identity.email };
   await ensureSchema();
   if (!(await ensureHousehold(user))) return NextResponse.json({ error: 'Este controle já está configurado para duas pessoas.' }, { status: 403 });
+  const receiptKey = new URL(request.url).searchParams.get('receipt');
+  if (receiptKey) {
+    const receipt = await env.DB.prepare(`SELECT receipt_content_type AS contentType FROM transactions WHERE household_id = ? AND receipt_key = ? LIMIT 1`).bind(householdId, receiptKey).first<{ contentType: string | null }>();
+    if (!receipt || !env.RECEIPTS) return NextResponse.json({ error: 'Nota não encontrada.' }, { status: 404 });
+    const object = await env.RECEIPTS.get(receiptKey);
+    if (!object) return NextResponse.json({ error: 'Nota não encontrada.' }, { status: 404 });
+    return new Response(object.body, { headers: { 'Content-Type': receipt.contentType ?? 'application/octet-stream', 'Cache-Control': 'private, max-age=300' } });
+  }
   await seedHousehold(user.userId);
   const [accountsResult, transactionsResult, budgetsResult] = await Promise.all([
     env.DB.prepare(`SELECT id, name, kind, owner, balance_cents AS balanceCents, closing_day AS closingDay, due_day AS dueDay FROM accounts WHERE household_id = ? ORDER BY kind, owner`).bind(householdId).all(),
-    env.DB.prepare(`SELECT id, account_id AS accountId, type, description, category, amount_cents AS amountCents, transaction_date AS transactionDate, direction, recurring, installment FROM transactions WHERE household_id = ? ORDER BY transaction_date DESC, created_at DESC LIMIT 200`).bind(householdId).all(),
+    env.DB.prepare(`SELECT id, account_id AS accountId, type, description, category, amount_cents AS amountCents, transaction_date AS transactionDate, direction, recurring, installment, receipt_key AS receiptKey, receipt_name AS receiptName, receipt_content_type AS receiptContentType FROM transactions WHERE household_id = ? ORDER BY transaction_date DESC, created_at DESC LIMIT 200`).bind(householdId).all(),
     env.DB.prepare(`SELECT id, category, month, limit_cents AS limitCents FROM budgets WHERE household_id = ? ORDER BY month DESC, category`).bind(householdId).all(),
   ]);
   return NextResponse.json({ mode: 'shared', currentUser: user, household: { id: householdId, name: 'Casa do Gui & Fer' }, accounts: accountsResult.results, transactions: (transactionsResult.results as Array<Record<string, unknown>>).map((transaction) => ({ ...transaction, recurring: Boolean(transaction.recurring) })), budgets: budgetsResult.results });
@@ -124,16 +139,36 @@ export async function GET() {
 export async function POST(request: Request) {
   const identity = await getChatGPTUser();
   if (!identity || !env.DB) return NextResponse.json({ error: 'É necessário entrar na sua conta para salvar lançamentos.' }, { status: 401 });
-  const body = (await request.json()) as Partial<DemoTransaction> & { amount?: number };
+  const contentType = request.headers.get('content-type') ?? '';
+  let body: (Partial<DemoTransaction> & { amount?: number | string });
+  let receipt: File | null = null;
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await request.formData();
+    const upload = formData.get('receipt');
+    body = { id: String(formData.get('id') ?? ''), accountId: String(formData.get('accountId') ?? ''), type: formData.get('type') === 'income' ? 'income' : 'expense', description: String(formData.get('description') ?? ''), category: String(formData.get('category') ?? ''), amount: formData.get('amount') ? String(formData.get('amount')) : '', transactionDate: String(formData.get('transactionDate') ?? ''), direction: formData.get('direction') ? String(formData.get('direction')) as 'ida' | 'volta' : null, recurring: formData.get('recurring') === 'true', installment: formData.get('installment') ? String(formData.get('installment')) : null };
+    if (upload && typeof upload !== 'string' && 'arrayBuffer' in upload) receipt = upload as File;
+  } else {
+    body = (await request.json()) as Partial<DemoTransaction> & { amount?: number | string };
+  }
   const amountCents = body.amount != null ? Math.round(Number(body.amount) * 100) : Math.round(Number(body.amountCents ?? 0));
   if (!body.description || !body.accountId || !body.category || !body.transactionDate || !amountCents) return NextResponse.json({ error: 'Preencha descrição, conta, categoria, data e valor.' }, { status: 400 });
+  if (receipt && (!receipt.type.startsWith('image/') || receipt.size > 10 * 1024 * 1024)) return NextResponse.json({ error: 'A foto precisa ser uma imagem de até 10 MB.' }, { status: 400 });
+  if (receipt && !env.RECEIPTS) return NextResponse.json({ error: 'O armazenamento das notas ainda não está disponível.' }, { status: 503 });
   await ensureSchema();
   if (!(await ensureHousehold({ userId: identity.userId, displayName: identity.displayName, email: identity.email }))) return NextResponse.json({ error: 'Este controle já está configurado para duas pessoas.' }, { status: 403 });
-  const account = await env.DB.prepare(`SELECT id FROM accounts WHERE id = ? AND household_id = ? LIMIT 1`).bind(body.accountId, householdId).first();
+  const account = await env.DB.prepare(`SELECT id, kind FROM accounts WHERE id = ? AND household_id = ? LIMIT 1`).bind(body.accountId, householdId).first<{ id: string; kind: string }>();
   if (!account) return NextResponse.json({ error: 'Conta não encontrada.' }, { status: 400 });
   const transaction = { id: crypto.randomUUID(), accountId: body.accountId, type: body.type === 'income' ? 'income' : 'expense', description: body.description, category: body.category, amountCents, transactionDate: body.transactionDate, direction: body.direction ?? null, recurring: Boolean(body.recurring), installment: body.installment ?? null };
-  await env.DB.prepare(`INSERT INTO transactions (id, household_id, account_id, user_id, type, description, category, amount_cents, transaction_date, direction, recurring, installment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(transaction.id, householdId, transaction.accountId, identity.userId, transaction.type, transaction.description, transaction.category, transaction.amountCents, transaction.transactionDate, transaction.direction, transaction.recurring ? 1 : 0, transaction.installment, nowIso()).run();
-  return NextResponse.json(transaction, { status: 201 });
+  const receiptKey = receipt ? `receipts/${householdId}/${transaction.id}` : null;
+  const receiptName = receipt?.name ?? null;
+  const receiptContentType = receipt?.type ?? null;
+  if (receipt && receiptKey) await env.RECEIPTS.put(receiptKey, await receipt.arrayBuffer(), { httpMetadata: { contentType: receiptContentType ?? 'image/jpeg' } });
+  const balanceDelta = transaction.type === 'expense' ? account.kind === 'credit_card' ? amountCents : -amountCents : account.kind === 'credit_card' ? -amountCents : amountCents;
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO transactions (id, household_id, account_id, user_id, type, description, category, amount_cents, transaction_date, direction, recurring, installment, receipt_key, receipt_name, receipt_content_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ).bind(transaction.id, householdId, transaction.accountId, identity.userId, transaction.type, transaction.description, transaction.category, transaction.amountCents, transaction.transactionDate, transaction.direction, transaction.recurring ? 1 : 0, transaction.installment, receiptKey, receiptName, receiptContentType, nowIso()),
+    env.DB.prepare(`UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ? AND household_id = ?`).bind(balanceDelta, transaction.accountId, householdId),
+  ]);
+  return NextResponse.json({ ...transaction, receiptKey, receiptName, receiptContentType }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {

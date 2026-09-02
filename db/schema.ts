@@ -64,6 +64,9 @@ export const transactions = sqliteTable(
     direction: text('direction'),
     recurring: integer('recurring', { mode: 'boolean' }).notNull().default(false),
     installment: text('installment'),
+    receiptKey: text('receipt_key'),
+    receiptName: text('receipt_name'),
+    receiptContentType: text('receipt_content_type'),
     createdAt: text('created_at').notNull(),
   },
   (table) => ({
