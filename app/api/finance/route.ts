@@ -13,22 +13,35 @@ const householdId = 'household-main';
 const nowIso = () => new Date().toISOString();
 
 const demoAccounts: DemoAccount[] = [
-  { id: 'bank-gui', name: 'Banco do Gui', kind: 'bank', owner: 'Gui', balanceCents: 0, closingDay: null, dueDay: null },
+  { id: 'bank-gui', name: 'Banco do Gui', kind: 'bank', owner: 'Gui', balanceCents: 356399, closingDay: null, dueDay: null },
   { id: 'bank-fer', name: 'Banco da Fer', kind: 'bank', owner: 'Fer', balanceCents: 0, closingDay: null, dueDay: null },
   { id: 'card-gui', name: 'Cartão do Gui', kind: 'credit_card', owner: 'Gui', balanceCents: 0, closingDay: null, dueDay: null },
   { id: 'card-fer', name: 'Cartão da Fer', kind: 'credit_card', owner: 'Fer', balanceCents: 0, closingDay: null, dueDay: null },
-  { id: 'flash-gui', name: 'Flash do Gui', kind: 'flash', owner: 'Gui', balanceCents: 0, closingDay: null, dueDay: null },
+  { id: 'flash-gui', name: 'Flash do Gui', kind: 'flash', owner: 'Gui', balanceCents: 105912, closingDay: null, dueDay: null },
   { id: 'flash-fer', name: 'Flash da Fer', kind: 'flash', owner: 'Fer', balanceCents: 0, closingDay: null, dueDay: null },
-  { id: 'reserve-gui', name: 'Reserva do Gui', kind: 'reserve', owner: 'Gui', balanceCents: 0, closingDay: null, dueDay: null },
+  { id: 'reserve-gui', name: 'Reserva do Gui', kind: 'reserve', owner: 'Gui', balanceCents: 3132155, closingDay: null, dueDay: null },
   { id: 'reserve-fer', name: 'Reserva da Fer', kind: 'reserve', owner: 'Fer', balanceCents: 0, closingDay: null, dueDay: null },
 ];
 
-const demoTransactions: DemoTransaction[] = [];
+const demoTransactions: DemoTransaction[] = [
+  { id: 'sheet-payment-old-rent', accountId: 'bank-gui', type: 'expense', description: 'Aluguel antigo', category: 'Moradia', amountCents: 139000, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-new-rent', accountId: 'bank-gui', type: 'expense', description: 'Novo aluguel', category: 'Moradia', amountCents: 351237, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-condo', accountId: 'bank-gui', type: 'expense', description: 'Condomínio', category: 'Moradia', amountCents: 76000, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-card', accountId: 'bank-gui', type: 'expense', description: 'Pagamento do cartão de crédito', category: 'Outros', amountCents: 446699, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-josy', accountId: 'bank-gui', type: 'expense', description: 'Josy', category: 'Outros', amountCents: 20000, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-energy', accountId: 'bank-gui', type: 'expense', description: 'Energia', category: 'Moradia', amountCents: 29000, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-sanasa', accountId: 'bank-gui', type: 'expense', description: 'Sanasa', category: 'Moradia', amountCents: 19000, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-internet', accountId: 'bank-gui', type: 'expense', description: 'Internet', category: 'Assinaturas', amountCents: 10200, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-payment-spotify', accountId: 'bank-gui', type: 'expense', description: 'Spotify', category: 'Assinaturas', amountCents: 1364, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+  { id: 'sheet-food-lunch', accountId: 'flash-gui', type: 'expense', description: 'Almoço', category: 'Alimentação', amountCents: 3189, transactionDate: '2026-08-31', direction: null, recurring: false, installment: null },
+  { id: 'sheet-food-snack', accountId: 'flash-gui', type: 'expense', description: 'Lanche à noite', category: 'Alimentação', amountCents: 6894, transactionDate: '2026-08-31', direction: null, recurring: false, installment: null },
+  { id: 'sheet-uber-0831-1', accountId: 'flash-gui', type: 'expense', description: 'Uber para trabalhar', category: 'Transporte', amountCents: 906, transactionDate: '2026-08-31', direction: null, recurring: false, installment: null },
+  { id: 'sheet-uber-0831-2', accountId: 'flash-gui', type: 'expense', description: 'Uber para trabalhar', category: 'Transporte', amountCents: 1398, transactionDate: '2026-08-31', direction: null, recurring: false, installment: null },
+  { id: 'sheet-uber-0901-1', accountId: 'flash-gui', type: 'expense', description: 'Uber para trabalhar', category: 'Transporte', amountCents: 1104, transactionDate: '2026-09-01', direction: null, recurring: false, installment: null },
+  { id: 'sheet-uber-0901-2', accountId: 'flash-gui', type: 'expense', description: 'Uber para trabalhar', category: 'Transporte', amountCents: 1290, transactionDate: '2026-09-01', direction: null, recurring: false, installment: null },
+  { id: 'sheet-uber-0902-1', accountId: 'flash-gui', type: 'expense', description: 'Uber para trabalhar', category: 'Transporte', amountCents: 4202, transactionDate: '2026-09-02', direction: null, recurring: false, installment: null },
+];
 const demoBudgets: Array<{ id: string; category: string; month: string; limitCents: number }> = [];
-
-function demoPayload(user: FinanceUser | null) {
-  return { mode: user ? 'shared' : 'preview', currentUser: user ?? { userId: 'preview', displayName: 'Gui & Fer', email: '' }, household: { id: householdId, name: 'Casa do Gui & Fer' }, accounts: demoAccounts, transactions: demoTransactions, budgets: demoBudgets };
-}
 
 async function ensureSchema() {
   if (!env.DB) return;
@@ -70,7 +83,21 @@ async function seedHousehold(userId: string) {
     ]);
   }
   const existing = await env.DB.prepare(`SELECT id FROM accounts WHERE household_id = ? LIMIT 1`).bind(householdId).first();
-  if (existing) return;
+  if (existing) {
+    const imported = await env.DB.prepare(`SELECT id FROM transactions WHERE household_id = ? AND id = ? LIMIT 1`).bind(householdId, 'sheet-payment-old-rent').first();
+    if (!imported) {
+      const [transactionCount, nonZeroBalanceCount] = await Promise.all([
+        env.DB.prepare(`SELECT COUNT(*) AS count FROM transactions WHERE household_id = ?`).bind(householdId).first<{ count: number }>(),
+        env.DB.prepare(`SELECT COUNT(*) AS count FROM accounts WHERE household_id = ? AND balance_cents != 0`).bind(householdId).first<{ count: number }>(),
+      ]);
+      const statements = demoTransactions.map((transaction) => env.DB.prepare(`INSERT OR IGNORE INTO transactions (id, household_id, account_id, user_id, type, description, category, amount_cents, transaction_date, direction, recurring, installment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(transaction.id, householdId, transaction.accountId, userId, transaction.type, transaction.description, transaction.category, transaction.amountCents, transaction.transactionDate, transaction.direction, transaction.recurring ? 1 : 0, transaction.installment, nowIso()));
+      if (Number(transactionCount?.count ?? 0) === 0 && Number(nonZeroBalanceCount?.count ?? 0) === 0) {
+        statements.push(...demoAccounts.map((account) => env.DB.prepare(`UPDATE accounts SET balance_cents = ?, closing_day = ?, due_day = ? WHERE household_id = ? AND id = ?`).bind(account.balanceCents, account.closingDay, account.dueDay, householdId, account.id)));
+      }
+      await env.DB.batch(statements);
+    }
+    return;
+  }
   const timestamp = nowIso();
   const statements = demoAccounts.map((account) => env.DB.prepare(`INSERT INTO accounts (id, household_id, name, kind, owner, balance_cents, closing_day, due_day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(account.id, householdId, account.name, account.kind, account.owner, account.balanceCents, account.closingDay, account.dueDay, timestamp));
   statements.push(...demoTransactions.map((transaction) => env.DB.prepare(`INSERT INTO transactions (id, household_id, account_id, user_id, type, description, category, amount_cents, transaction_date, direction, recurring, installment, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(transaction.id, householdId, transaction.accountId, userId, transaction.type, transaction.description, transaction.category, transaction.amountCents, transaction.transactionDate, transaction.direction, transaction.recurring ? 1 : 0, transaction.installment, timestamp)));
@@ -80,8 +107,9 @@ async function seedHousehold(userId: string) {
 
 export async function GET() {
   const identity = await getChatGPTUser();
-  const user = identity ? { userId: identity.userId, displayName: identity.displayName, email: identity.email } : null;
-  if (!env.DB || !user) return NextResponse.json(demoPayload(user));
+  if (!identity) return NextResponse.json({ error: 'É necessário entrar na sua conta para visualizar este controle.' }, { status: 401 });
+  if (!env.DB) return NextResponse.json({ error: 'O banco de dados ainda não está disponível.' }, { status: 503 });
+  const user = { userId: identity.userId, displayName: identity.displayName, email: identity.email };
   await ensureSchema();
   if (!(await ensureHousehold(user))) return NextResponse.json({ error: 'Este controle já está configurado para duas pessoas.' }, { status: 403 });
   await seedHousehold(user.userId);
