@@ -3,17 +3,14 @@ import tailwindcss from '@tailwindcss/postcss';
 import tailwindcssVite from '@tailwindcss/vite';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
-import hostingConfig from './.openai/hosting.json';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   '00000000-0000-4000-8000-000000000000';
 
-const { d1, r2 } = hostingConfig;
-
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
-const localBindingConfig = {
+const createLocalBindingConfig = (d1?: string, r2?: string) => ({
   main: 'vinext/server/fetch-handler',
   compatibility_flags: ['nodejs_compat'],
   d1_databases: d1
@@ -33,7 +30,7 @@ const localBindingConfig = {
         },
       ]
     : [],
-};
+});
 
 export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
@@ -52,6 +49,9 @@ export default defineConfig(async () => {
     };
   }
 
+  const hostingConfig = await import('./.openai/hosting.json');
+  const { d1, r2 } = hostingConfig.default;
+
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
@@ -66,7 +66,7 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         inspectorPort: false,
-        config: localBindingConfig,
+        config: createLocalBindingConfig(d1, r2),
       }),
     ],
   };
