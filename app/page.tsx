@@ -28,6 +28,18 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+} from 'firebase/auth';
+import {
+  ensureMember,
+  loadFirebaseFinance,
+  saveFirebaseTransaction,
+  updateFirebaseBalance,
+} from '@/lib/firebase-finance';
+import { firebaseAuth } from '@/lib/firebase';
 
 type Account = {
   id: string;
@@ -51,6 +63,7 @@ type Transaction = {
   recurring: boolean;
   installment: string | null;
   receiptKey?: string | null;
+  receiptUrl?: string | null;
   receiptName?: string | null;
   receiptContentType?: string | null;
 };
@@ -153,6 +166,25 @@ function getCurrentMonth() {
 }
 
 function SignInGate() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    try {
+      if (isCreating)
+        await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      else await signInWithEmailAndPassword(firebaseAuth, email, password);
+    } catch {
+      setError(
+        isCreating
+          ? 'Não foi possível criar a conta.'
+          : 'E-mail ou senha inválidos.',
+      );
+    }
+  }
   return (
     <main className="access-gate">
       <div className="access-card">
@@ -165,13 +197,33 @@ function SignInGate() {
           Os saldos e lançamentos da casa ficam visíveis somente para quem
           entrar na própria conta.
         </p>
-        <a
-          className="primary-button access-button"
-          href="/signin-with-chatgpt?return_to=%2F"
-          target="_top"
+        <form className="access-form" onSubmit={submit}>
+          <input
+            required
+            type="email"
+            placeholder="Seu e-mail"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+          <input
+            required
+            minLength={6}
+            type="password"
+            placeholder="Senha (mínimo 6 caracteres)"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          {error && <small className="access-error">{error}</small>}
+          <button className="primary-button access-button">
+            {isCreating ? 'Criar conta' : 'Entrar'} <ArrowUpRight size={16} />
+          </button>
+        </form>
+        <button
+          className="access-switch"
+          onClick={() => setIsCreating((current) => !current)}
         >
-          Entrar com ChatGPT <ArrowUpRight size={16} />
-        </a>
+          {isCreating ? 'Já tenho uma conta' : 'Criar minha conta'}
+        </button>
         <small>
           Depois do login, Gui e Fer compartilham a mesma visão financeira.
         </small>
@@ -220,29 +272,43 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    fetch('/api/finance')
-      .then(async (response) => {
-        if (response.status === 401) {
-          setAccessState('anonymous');
-          return null;
-        }
-        if (!response.ok) throw new Error('finance-load-failed');
-        return response.json();
-      })
-      .then((data) => {
-        const financeData = data as FinancePayload;
-        if (!active || !data) return;
-        setPayload(financeData);
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+      if (!user) {
+        setAccessState('anonymous');
+        setIsLoading(false);
+        return;
+      }
+      try {
+        await ensureMember({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+        });
+        const financeData = await loadFirebaseFinance();
+        if (!active) return;
+        setPayload({
+          mode: 'shared',
+          currentUser: {
+            displayName: user.displayName ?? user.email ?? 'Usuário',
+            email: user.email ?? '',
+          },
+          household: { name: 'Casa do Gui & Fer' },
+          ...financeData,
+        });
         setForm((current) => ({
           ...current,
           accountId: financeData.accounts[0]?.id ?? '',
         }));
         setAccessState('authenticated');
-      })
-      .catch(() => active && setAccessState('error'))
-      .finally(() => active && setIsLoading(false));
+      } catch {
+        if (active) setAccessState('error');
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    });
     return () => {
       active = false;
+      unsubscribe();
     };
   }, []);
 
@@ -354,20 +420,12 @@ export default function Home() {
       }),
     }));
     try {
-      const responses = await Promise.all(
+      await Promise.all(
         updates.map((update) =>
-          fetch('/api/finance', {
-            method: 'PATCH',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(update),
-          }),
+          updateFirebaseBalance(update.accountId, update.balanceCents),
         ),
       );
-      setNotice(
-        responses.every((response) => response.ok)
-          ? 'Saldos atualizados no controle compartilhado.'
-          : 'Saldos atualizados nesta sessão. Entre para sincronizar.',
-      );
+      setNotice('Saldos atualizados no controle compartilhado.');
     } catch {
       setNotice('Saldos atualizados nesta sessão.');
     } finally {
@@ -393,57 +451,34 @@ export default function Home() {
       receiptName: form.receiptFile?.name ?? null,
     };
     try {
-      const formData = new FormData();
-      formData.append('accountId', form.accountId);
-      formData.append('type', form.type);
-      formData.append('description', form.description);
-      formData.append('category', form.category);
-      formData.append('amount', String(Number(form.amount.replace(',', '.'))));
-      formData.append('transactionDate', form.transactionDate);
-      formData.append('direction', form.direction);
-      formData.append('recurring', String(form.recurring));
-      formData.append('installment', form.installment);
-      if (form.receiptFile)
-        formData.append('receipt', form.receiptFile, form.receiptFile.name);
-      const response = await fetch('/api/finance', {
-        method: 'POST',
-        body: formData,
-      });
-      if (response.ok) {
-        const saved = (await response.json()) as Transaction;
-        const selectedAccount = payload.accounts.find(
-          (account) => account.id === saved.accountId,
-        );
-        const balanceDelta =
-          saved.type === 'expense'
-            ? selectedAccount?.kind === 'credit_card'
-              ? saved.amountCents
-              : -saved.amountCents
-            : selectedAccount?.kind === 'credit_card'
-              ? -saved.amountCents
-              : saved.amountCents;
-        setPayload((current) => ({
-          ...current,
-          accounts: current.accounts.map((account) =>
-            account.id === saved.accountId
-              ? {
-                  ...account,
-                  balanceCents: account.balanceCents + balanceDelta,
-                }
-              : account,
-          ),
-          transactions: [saved, ...current.transactions],
-        }));
-        setNotice('Lançamento salvo no controle compartilhado.');
-      } else {
-        setPayload((current) => ({
-          ...current,
-          transactions: [optimistic, ...current.transactions],
-        }));
-        setNotice(
-          'Adicionado nesta sessão. Entre para sincronizar com o banco de dados.',
-        );
-      }
+      const selectedAccount = payload.accounts.find(
+        (account) => account.id === optimistic.accountId,
+      );
+      if (!selectedAccount) throw new Error('account-not-found');
+      const balanceDelta =
+        optimistic.type === 'expense'
+          ? selectedAccount.kind === 'credit_card'
+            ? optimistic.amountCents
+            : -optimistic.amountCents
+          : selectedAccount.kind === 'credit_card'
+            ? -optimistic.amountCents
+            : optimistic.amountCents;
+      const saved = await saveFirebaseTransaction(
+        optimistic,
+        selectedAccount.balanceCents,
+        balanceDelta,
+        form.receiptFile,
+      );
+      setPayload((current) => ({
+        ...current,
+        accounts: current.accounts.map((account) =>
+          account.id === saved.accountId
+            ? { ...account, balanceCents: account.balanceCents + balanceDelta }
+            : account,
+        ),
+        transactions: [saved, ...current.transactions],
+      }));
+      setNotice('Lançamento salvo no controle compartilhado.');
     } catch {
       setPayload((current) => ({
         ...current,
@@ -1615,10 +1650,10 @@ function TransactionRow({
               : ''}
             {transaction.recurring ? 'Recorrente · ' : ''}
             {transaction.category}
-            {transaction.receiptKey && (
+            {transaction.receiptUrl && (
               <a
                 className="receipt-link"
-                href={`/api/finance?receipt=${encodeURIComponent(transaction.receiptKey)}`}
+                href={transaction.receiptUrl}
                 target="_blank"
                 rel="noreferrer"
                 title={transaction.receiptName ?? 'Abrir foto da nota'}
