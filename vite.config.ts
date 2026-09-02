@@ -49,9 +49,6 @@ export default defineConfig(async () => {
     };
   }
 
-  const hostingConfig = await import('./.openai/hosting.json');
-  const { d1, r2 } = hostingConfig.default;
-
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
@@ -66,7 +63,7 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         inspectorPort: false,
-        config: createLocalBindingConfig(d1, r2),
+        config: createLocalBindingConfig(),
       }),
     ],
   };
