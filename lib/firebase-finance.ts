@@ -245,7 +245,15 @@ export async function loadFirebaseFinance() {
   const snapshotsResult = await getDocs(
     query(investmentSnapshotsPath, orderBy('date', 'asc')),
   );
-  const categoriesResult = await getDocs(categoriesPath);
+  let savedCategories: FirebaseCategory[] = [];
+  try {
+    const categoriesResult = await getDocs(categoriesPath);
+    savedCategories = categoriesResult.docs.map(
+      (item) => item.data() as FirebaseCategory,
+    );
+  } catch {
+    // Keep the dashboard available while an older Firestore ruleset is deployed.
+  }
   const snapshots = snapshotsResult.docs.map(
     (item) => item.data() as FirebaseInvestmentSnapshot,
   );
@@ -268,9 +276,7 @@ export async function loadFirebaseFinance() {
     ),
     budgets: [],
     investmentSnapshots: snapshots,
-    categories: categoriesResult.docs.map(
-      (item) => item.data() as FirebaseCategory,
-    ),
+    categories: savedCategories,
   };
 }
 
