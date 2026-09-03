@@ -242,9 +242,17 @@ export async function loadFirebaseFinance() {
   const finalTransactionsResult = transactionsResult.empty
     ? await getDocs(query(transactionsPath, orderBy('transactionDate', 'desc')))
     : transactionsResult;
-  const snapshotsResult = await getDocs(
-    query(investmentSnapshotsPath, orderBy('date', 'asc')),
-  );
+  let snapshots: FirebaseInvestmentSnapshot[] = [];
+  try {
+    const snapshotsResult = await getDocs(
+      query(investmentSnapshotsPath, orderBy('date', 'asc')),
+    );
+    snapshots = snapshotsResult.docs.map(
+      (item) => item.data() as FirebaseInvestmentSnapshot,
+    );
+  } catch {
+    // Keep authentication usable while an older Firestore ruleset is deployed.
+  }
   let savedCategories: FirebaseCategory[] = [];
   try {
     const categoriesResult = await getDocs(categoriesPath);
@@ -254,19 +262,20 @@ export async function loadFirebaseFinance() {
   } catch {
     // Keep the dashboard available while an older Firestore ruleset is deployed.
   }
-  const snapshots = snapshotsResult.docs.map(
-    (item) => item.data() as FirebaseInvestmentSnapshot,
-  );
   if (!snapshots.length) {
     const initialTotalCents = accountsResult.docs
       .map((item) => item.data() as FirebaseAccount)
       .filter((account) => account.kind === 'reserve')
       .reduce((sum, account) => sum + account.balanceCents, 0);
     const date = new Date().toISOString().slice(0, 10);
-    await setDoc(doc(investmentSnapshotsPath, date), {
-      date,
-      totalCents: initialTotalCents,
-    });
+    try {
+      await setDoc(doc(investmentSnapshotsPath, date), {
+        date,
+        totalCents: initialTotalCents,
+      });
+    } catch {
+      // The snapshot is optional; the dashboard can still show current balances.
+    }
     snapshots.push({ date, totalCents: initialTotalCents });
   }
   return {
