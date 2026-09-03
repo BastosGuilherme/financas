@@ -1281,6 +1281,12 @@ export default function Home() {
           >
             Tentar novamente <ArrowUpRight size={16} />
           </button>
+          <button
+            className="access-switch error-login-button"
+            onClick={() => signOut(firebaseAuth)}
+          >
+            Voltar para o login
+          </button>
         </div>
       </main>
     );
