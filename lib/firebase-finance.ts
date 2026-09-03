@@ -56,6 +56,15 @@ export type FirebaseShoppingItem = {
   createdAt: string;
 };
 
+export type FirebaseAppointment = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  category: 'Pessoal' | 'Casa' | 'Trabalho' | 'Saúde' | 'Outros';
+  notes: string;
+};
+
 const accountsPath = collection(
   firestore,
   'households',
@@ -85,6 +94,12 @@ const shoppingItemsPath = collection(
   'households',
   HOUSEHOLD_ID,
   'shoppingItems',
+);
+const appointmentsPath = collection(
+  firestore,
+  'households',
+  HOUSEHOLD_ID,
+  'appointments',
 );
 
 const starterAccounts: FirebaseAccount[] = [
@@ -287,6 +302,15 @@ export async function loadFirebaseFinance() {
   } catch {
     // The shopping hub is optional while its Firestore rules are deployed.
   }
+  let appointments: FirebaseAppointment[] = [];
+  try {
+    const appointmentsResult = await getDocs(appointmentsPath);
+    appointments = appointmentsResult.docs.map(
+      (item) => item.data() as FirebaseAppointment,
+    );
+  } catch {
+    // The agenda is optional while its Firestore rules are deployed.
+  }
   if (!snapshots.length) {
     const initialTotalCents = accountsResult.docs
       .map((item) => item.data() as FirebaseAccount)
@@ -312,6 +336,7 @@ export async function loadFirebaseFinance() {
     investmentSnapshots: snapshots,
     categories: savedCategories,
     shoppingItems,
+    appointments,
   };
 }
 
@@ -334,6 +359,15 @@ export async function updateFirebaseShoppingItem(
 
 export async function deleteFirebaseShoppingItem(id: string) {
   await deleteDoc(doc(shoppingItemsPath, id));
+}
+
+export async function saveFirebaseAppointment(appointment: FirebaseAppointment) {
+  await setDoc(doc(appointmentsPath, appointment.id), appointment);
+  return appointment;
+}
+
+export async function deleteFirebaseAppointment(id: string) {
+  await deleteDoc(doc(appointmentsPath, id));
 }
 
 export async function recordFirebaseInvestmentSnapshot(totalCents: number) {

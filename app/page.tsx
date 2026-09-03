@@ -6,6 +6,7 @@ import {
   Bell,
   Building2,
   CalendarDays,
+  Clock3,
   Car,
   Check,
   ChevronDown,
@@ -38,9 +39,11 @@ import {
 import {
   loadFirebaseFinance,
   deleteFirebaseShoppingItem,
+  deleteFirebaseAppointment,
   recordFirebaseInvestmentSnapshot,
   saveFirebaseCategory,
   saveFirebaseShoppingItem,
+  saveFirebaseAppointment,
   saveFirebaseTransaction,
   updateFirebaseShoppingItem,
   updateFirebaseBalance,
@@ -97,6 +100,15 @@ type ShoppingItem = {
   createdAt: string;
 };
 
+type Appointment = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  category: 'Pessoal' | 'Casa' | 'Trabalho' | 'Saúde' | 'Outros';
+  notes: string;
+};
+
 type FinancePayload = {
   mode: 'preview' | 'shared';
   currentUser: { displayName: string; email: string };
@@ -107,6 +119,7 @@ type FinancePayload = {
   investmentSnapshots: InvestmentSnapshot[];
   categories: Category[];
   shoppingItems: ShoppingItem[];
+  appointments: Appointment[];
 };
 
 type FormState = {
@@ -151,6 +164,7 @@ const navItems = [
   { id: 'accounts', label: 'Contas e cartões', icon: WalletCards },
   { id: 'budgets', label: 'Limites', icon: SlidersHorizontal },
   { id: 'shopping', label: 'Lista de compras', icon: ShoppingCart },
+  { id: 'appointments', label: 'Compromissos', icon: CalendarDays },
 ] as const;
 
 const today = new Date().toISOString().slice(0, 10);
@@ -257,6 +271,7 @@ export default function Home() {
     investmentSnapshots: [],
     categories: [],
     shoppingItems: [],
+    appointments: [],
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -275,6 +290,14 @@ export default function Home() {
   const [shoppingQuantity, setShoppingQuantity] = useState('');
   const [shoppingCategory, setShoppingCategory] =
     useState<ShoppingItem['category']>('Supermercado');
+  const [appointmentTitle, setAppointmentTitle] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState(today);
+  const [appointmentTime, setAppointmentTime] = useState('');
+  const [appointmentCategory, setAppointmentCategory] =
+    useState<Appointment['category']>('Pessoal');
+  const [appointmentNotes, setAppointmentNotes] = useState('');
+  const [selectedAppointmentDate, setSelectedAppointmentDate] =
+    useState(today);
   const [filter, setFilter] = useState('Todos');
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>(
     {},
@@ -635,6 +658,52 @@ export default function Home() {
         shoppingItems: [item, ...current.shoppingItems],
       }));
       setNotice('Não foi possível remover o item.');
+    }
+  }
+
+  async function addAppointment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = appointmentTitle.trim();
+    if (!title || !appointmentDate) return;
+    const appointment: Appointment = {
+      id: `appointment-${Date.now()}`,
+      title,
+      date: appointmentDate,
+      time: appointmentTime,
+      category: appointmentCategory,
+      notes: appointmentNotes.trim(),
+    };
+    try {
+      await saveFirebaseAppointment(appointment);
+      setPayload((current) => ({
+        ...current,
+        appointments: [...current.appointments, appointment],
+      }));
+      setSelectedAppointmentDate(appointmentDate);
+      setNotice('Compromisso adicionado.');
+    } catch {
+      setNotice('Não foi possível salvar o compromisso.');
+    }
+    setAppointmentTitle('');
+    setAppointmentTime('');
+    setAppointmentNotes('');
+  }
+
+  async function removeAppointment(appointment: Appointment) {
+    setPayload((current) => ({
+      ...current,
+      appointments: current.appointments.filter(
+        (item) => item.id !== appointment.id,
+      ),
+    }));
+    try {
+      await deleteFirebaseAppointment(appointment.id);
+    } catch {
+      setPayload((current) => ({
+        ...current,
+        appointments: [...current.appointments, appointment],
+      }));
+      setNotice('Não foi possível remover o compromisso.');
     }
   }
 
@@ -1236,6 +1305,143 @@ export default function Home() {
     );
   }
 
+  function renderAppointments() {
+    const monthStart = new Date(`${currentMonth}-01T12:00:00`);
+    const daysInMonth = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth() + 1,
+      0,
+    ).getDate();
+    const firstWeekday = (monthStart.getDay() + 6) % 7;
+    const calendarCells = [
+      ...Array.from({ length: firstWeekday }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+    ];
+    const selectedAppointments = payload.appointments
+      .filter((item) => item.date === selectedAppointmentDate)
+      .sort((a, b) => a.time.localeCompare(b.time));
+    const selectedDateLabel = new Intl.DateTimeFormat('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date(`${selectedAppointmentDate}T12:00:00`));
+    return (
+      <section className="page-section appointments-page">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Hub da casa</p>
+            <h1>Compromissos</h1>
+            <p className="muted">Organizem juntos os próximos compromissos.</p>
+          </div>
+          <span className="shopping-count">{payload.appointments.length} agendados</span>
+        </div>
+        <div className="appointments-layout">
+          <div className="calendar-panel panel">
+            <div className="calendar-heading">
+              <h2>{monthName}</h2>
+              <CalendarDays size={19} />
+            </div>
+            <div className="calendar-weekdays">
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
+                <span key={day}>{day}</span>
+              ))}
+            </div>
+            <div className="calendar-grid">
+              {calendarCells.map((day, index) => {
+                if (!day) return <span className="calendar-empty" key={`empty-${index}`} />;
+                const date = `${currentMonth}-${String(day).padStart(2, '0')}`;
+                const dayAppointments = payload.appointments.filter((item) => item.date === date);
+                return (
+                  <button
+                    className={`calendar-day ${date === selectedAppointmentDate ? 'selected' : ''}`}
+                    key={date}
+                    onClick={() => setSelectedAppointmentDate(date)}
+                  >
+                    <span>{day}</span>
+                    {dayAppointments.length ? <i>{dayAppointments.length}</i> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="appointment-side">
+            <form className="appointment-form panel" onSubmit={addAppointment}>
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Novo evento</p>
+                  <h2>Adicionar compromisso</h2>
+                </div>
+              </div>
+              <input
+                required
+                value={appointmentTitle}
+                onChange={(event) => setAppointmentTitle(event.target.value)}
+                placeholder="Ex.: Consulta, reunião ou mercado"
+              />
+              <div className="form-grid">
+                <input
+                  required
+                  type="date"
+                  value={appointmentDate}
+                  onChange={(event) => setAppointmentDate(event.target.value)}
+                />
+                <input
+                  type="time"
+                  value={appointmentTime}
+                  onChange={(event) => setAppointmentTime(event.target.value)}
+                />
+              </div>
+              <select
+                value={appointmentCategory}
+                onChange={(event) =>
+                  setAppointmentCategory(event.target.value as Appointment['category'])
+                }
+              >
+                <option>Pessoal</option>
+                <option>Casa</option>
+                <option>Trabalho</option>
+                <option>Saúde</option>
+                <option>Outros</option>
+              </select>
+              <textarea
+                value={appointmentNotes}
+                onChange={(event) => setAppointmentNotes(event.target.value)}
+                placeholder="Observação (opcional)"
+                rows={3}
+              />
+              <button className="primary-button" type="submit">
+                <Plus size={16} /> Adicionar compromisso
+              </button>
+            </form>
+            <div className="appointments-list panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Agenda do dia</p>
+                  <h2>{selectedDateLabel}</h2>
+                </div>
+                <Clock3 size={19} />
+              </div>
+              {selectedAppointments.length ? selectedAppointments.map((appointment) => (
+                <div className="appointment-item" key={appointment.id}>
+                  <span className="appointment-dot" />
+                  <div>
+                    <b>{appointment.title}</b>
+                    <small>{appointment.time || 'Horário não definido'} · {appointment.category}</small>
+                    {appointment.notes ? <p>{appointment.notes}</p> : null}
+                  </div>
+                  <button className="icon-button" aria-label={`Excluir ${appointment.title}`} onClick={() => removeAppointment(appointment)}>
+                    <X size={14} />
+                  </button>
+                </div>
+              )) : (
+                <div className="empty-copy">Nenhum compromisso neste dia.<small>Selecione outra data ou adicione um evento.</small></div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (isLoading || accessState === 'checking')
     return (
       <div className="loading-state">
@@ -1338,7 +1544,9 @@ export default function Home() {
                 ? renderAccounts()
                 : activeView === 'budgets'
                   ? renderBudgets()
-                  : renderShopping()}
+                  : activeView === 'shopping'
+                    ? renderShopping()
+                    : renderAppointments()}
         </div>
       </main>
       <button
