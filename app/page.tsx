@@ -640,17 +640,20 @@ export default function Home() {
 
   function renderOverview() {
     const maxCategory = Math.max(...Object.values(categoryTotals), 1);
-    const foodEnd = Math.min(
-      ((categoryTotals['Alimentação'] ?? 0) / Math.max(totalExpenses, 1)) * 360,
-      360,
-    );
-    const transportEnd = Math.min(
-      (((categoryTotals['Alimentação'] ?? 0) +
-        (categoryTotals['Transporte'] ?? 0)) /
-        Math.max(totalExpenses, 1)) *
-        360,
-      360,
-    );
+    const spendingGradient = Object.entries(categoryTotals).length
+      ? (() => {
+          let currentDegree = 0;
+          const stops = Object.entries(categoryTotals).map(
+            ([category, value]) => {
+              const startDegree = currentDegree;
+              currentDegree +=
+                (value / Math.max(totalExpenses, 1)) * 360;
+              return `${categoryColor(category)} ${startDegree}deg ${currentDegree}deg`;
+            },
+          );
+          return stops.join(', ');
+        })()
+      : '#e7ece9 0deg 360deg';
     const balanceFor = (kind: Account['kind'], owner: Account['owner']) =>
       payload.accounts
         .filter((account) => account.kind === kind && account.owner === owner)
@@ -840,7 +843,7 @@ export default function Home() {
               <div
                 className="donut"
                 style={{
-                  background: `conic-gradient(${categoryColor('Alimentação')} 0 ${foodEnd}deg, ${categoryColor('Transporte')} ${foodEnd}deg ${transportEnd}deg, #e7ece9 ${transportEnd}deg 360deg)`,
+                  background: `conic-gradient(${spendingGradient})`,
                 }}
               >
                 <div>
