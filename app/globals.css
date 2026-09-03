@@ -69,6 +69,7 @@ button { cursor: pointer; }
 .receipt-upload-control { position: relative; display: flex; align-items: center; gap: 8px; min-height: 37px; padding: 0 10px; color: var(--purple); border: 1px solid var(--line); background: #fbfcfb; border-radius: 9px; font-size: 11px; font-weight: 600; }.receipt-upload-control input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }.receipt-preview { width: 100%; max-height: 150px; object-fit: cover; border: 1px solid var(--line); border-radius: 10px; }.receipt-link { display: inline-flex; align-items: center; gap: 4px; margin-left: 7px; color: var(--purple); font-size: 9px; font-weight: 700; text-decoration: none; }
 .access-form { display: grid; gap: 10px; }.access-form input { width: 100%; height: 39px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfb; }.access-form .access-button { margin-top: 5px; }.access-switch { width: 100%; margin-top: 11px; padding: 0; color: var(--purple); border: 0; background: transparent; font-size: 10px; font-weight: 700; }.access-error { color: var(--coral); font-size: 10px; }
 .category-field { min-width: 0; }
+.overview-spending-grid { grid-template-columns: 1fr; }
 .error-login-button { margin-top: 12px; }
 .add-category-button { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 0; margin-top: 7px; color: var(--purple); border: 0; background: transparent; font-size: 10px; font-weight: 700; }
 .add-category-button:hover { color: var(--navy); }

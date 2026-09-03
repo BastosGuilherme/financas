@@ -360,14 +360,6 @@ export default function Home() {
   const reserves = payload.accounts
     .filter((account) => account.kind === 'reserve')
     .reduce((sum, account) => sum + account.balanceCents, 0);
-  const investmentTarget = 5000000;
-  const investmentHistory = payload.investmentSnapshots;
-  const firstInvestmentValue = investmentHistory[0]?.totalCents ?? reserves;
-  const investmentGrowth = reserves - firstInvestmentValue;
-  const investmentProgress = Math.min(
-    Math.round((reserves / investmentTarget) * 100),
-    100,
-  );
   const filteredTransactions = payload.transactions.filter(
     (transaction) =>
       filter === 'Todos' || transaction.type === filter.toLowerCase(),
@@ -662,43 +654,6 @@ export default function Home() {
             </div>
           </article>
         </section>
-        <section className="panel investment-progress-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Evolução dos investimentos</p>
-              <h2>Meta de R$ 50 mil</h2>
-            </div>
-            <span className="investment-growth">
-              {investmentGrowth >= 0 ? '+' : ''}{formatMoney(investmentGrowth)} desde o primeiro registro
-            </span>
-          </div>
-          <div className="investment-progress-top">
-            <strong>{formatMoney(reserves)}</strong>
-            <span>{investmentProgress}% da meta</span>
-          </div>
-          <div className="progress-track investment-track">
-            <span style={{ width: `${investmentProgress}%` }} />
-          </div>
-          <div className="investment-progress-foot">
-            <span>Meta: {formatMoney(investmentTarget)}</span>
-            <span>Faltam {formatMoney(Math.max(investmentTarget - reserves, 0))}</span>
-          </div>
-          <div className="investment-history" aria-label="Histórico dos investimentos">
-            {investmentHistory.slice(-8).map((snapshot) => (
-              <div key={snapshot.date}>
-                <span
-                  style={{
-                    height: `${Math.max((snapshot.totalCents / Math.max(reserves, 1)) * 100, 12)}%`,
-                  }}
-                />
-                <small>{formatDate(snapshot.date)}</small>
-              </div>
-            ))}
-          </div>
-          <small className="investment-note">
-            O histórico é atualizado uma vez por dia e sempre que você ajustar os saldos manualmente.
-          </small>
-        </section>
         <div className="invoice-heading">
           <div>
             <p className="eyebrow">Cartões</p>
@@ -748,35 +703,7 @@ export default function Home() {
             </div>
           </article>
         </section>
-        <section className="metrics-grid">
-          <article className="metric-card accent-card">
-            <div className="metric-top">
-              <span className="icon-bubble purple">
-                <Car size={17} />
-              </span>
-              <span className="metric-trend">
-                {uberExpenses.length} viagens
-              </span>
-            </div>
-            <p>Uber para trabalhar</p>
-            <strong>{formatMoney(uberTotal)}</strong>
-            <small>
-              ida{' '}
-              {formatMoney(
-                uberExpenses
-                  .filter((item) => item.direction === 'ida')
-                  .reduce((sum, item) => sum + item.amountCents, 0),
-              )}{' '}
-              · volta{' '}
-              {formatMoney(
-                uberExpenses
-                  .filter((item) => item.direction === 'volta')
-                  .reduce((sum, item) => sum + item.amountCents, 0),
-              )}
-            </small>
-          </article>
-        </section>
-        <section className="content-grid">
+        <section className="content-grid overview-spending-grid">
           <article className="panel spending-panel">
             <div className="panel-heading">
               <div>
@@ -860,130 +787,6 @@ export default function Home() {
                   <span className="chart-empty">Sem dados neste mês</span>
                 )}
               </div>
-            </div>
-          </article>
-          <article className="panel recent-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Movimentações</p>
-                <h2>Últimos lançamentos</h2>
-              </div>
-              <button className="icon-button" aria-label="Mais opções">
-                <MoreHorizontal size={18} />
-              </button>
-            </div>
-            <div className="transaction-list">
-              {payload.transactions.length ? (
-                payload.transactions
-                  .slice(0, 5)
-                  .map((transaction) => (
-                    <TransactionRow
-                      key={transaction.id}
-                      transaction={transaction}
-                      accounts={payload.accounts}
-                    />
-                  ))
-              ) : (
-                <div className="empty-panel">
-                  <span className="empty-icon">
-                    <Receipt size={17} />
-                  </span>
-                  <b>Nenhum lançamento ainda</b>
-                  <small>Registre a primeira despesa ou entrada da casa.</small>
-                </div>
-              )}
-            </div>
-            <button
-              className="full-width-button"
-              onClick={() => setActiveView('transactions')}
-            >
-              Ver todos os lançamentos <ArrowUpRight size={15} />
-            </button>
-          </article>
-        </section>
-        <section className="bottom-grid">
-          <article className="panel uber-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Transporte</p>
-                <h2>Uber do trabalho</h2>
-              </div>
-              <span className="mini-pill purple-pill">
-                <Car size={14} /> {uberExpenses.length} viagens
-              </span>
-            </div>
-            <div className="uber-total">
-              <strong>{formatMoney(uberTotal)}</strong>
-              <span>no período completo</span>
-            </div>
-            <div className="direction-grid">
-              <div>
-                <span className="direction-icon going">
-                  <ArrowUpRight size={15} />
-                </span>
-                <small>Idas</small>
-                <b>
-                  {formatMoney(
-                    uberExpenses
-                      .filter((item) => item.direction === 'ida')
-                      .reduce((sum, item) => sum + item.amountCents, 0),
-                  )}
-                </b>
-              </div>
-              <div>
-                <span className="direction-icon return">
-                  <ArrowDownLeft size={15} />
-                </span>
-                <small>Voltas</small>
-                <b>
-                  {formatMoney(
-                    uberExpenses
-                      .filter((item) => item.direction === 'volta')
-                      .reduce((sum, item) => sum + item.amountCents, 0),
-                  )}
-                </b>
-              </div>
-              <div>
-                <span className="direction-icon average">
-                  <TrendingUp size={15} />
-                </span>
-                <small>Média/viagem</small>
-                <b>
-                  {formatMoney(
-                    uberExpenses.length
-                      ? Math.round(uberTotal / uberExpenses.length)
-                      : 0,
-                  )}
-                </b>
-              </div>
-            </div>
-          </article>
-          <article className="panel budget-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Organização</p>
-                <h2>Limites do mês</h2>
-              </div>
-              <button
-                className="quiet-button"
-                onClick={() => setActiveView('budgets')}
-              >
-                Gerenciar <ArrowUpRight size={15} />
-              </button>
-            </div>
-            <div className="budget-list">
-              {budgetProgress.length ? (
-                budgetProgress
-                  .slice(0, 3)
-                  .map((budget) => (
-                    <BudgetRow key={budget.id} budget={budget} />
-                  ))
-              ) : (
-                <div className="empty-copy">
-                  Nenhum limite configurado.
-                  <small>Você pode criar por categoria.</small>
-                </div>
-              )}
             </div>
           </article>
         </section>
