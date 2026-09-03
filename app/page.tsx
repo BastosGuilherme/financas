@@ -172,14 +172,15 @@ function getCurrentMonth() {
   return current === '2026-09' ? '2026-09' : current;
 }
 
-function SignInGate() {
+function SignInGate({ initialError = '' }: { initialError?: string }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     try {
+      if (firebaseAuth.currentUser) await signOut(firebaseAuth);
       await signInWithEmailAndPassword(firebaseAuth, email, password);
     } catch {
       setError('E-mail ou senha inválidos.');
@@ -248,6 +249,7 @@ export default function Home() {
     'checking' | 'authenticated' | 'anonymous' | 'error'
   >('checking');
   const [notice, setNotice] = useState('');
+  const [accessError, setAccessError] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [filter, setFilter] = useState('Todos');
@@ -270,6 +272,7 @@ export default function Home() {
     let active = true;
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
       if (!user) {
+        setAccessError('');
         setAccessState('anonymous');
         setIsLoading(false);
         return;
@@ -292,7 +295,12 @@ export default function Home() {
         }));
         setAccessState('authenticated');
       } catch {
-        if (active) setAccessState('error');
+        if (active) {
+          setAccessError(
+            'Não foi possível carregar seus dados. Confira seu acesso e tente novamente.',
+          );
+          setAccessState('anonymous');
+        }
       } finally {
         if (active) setIsLoading(false);
       }
@@ -1261,35 +1269,8 @@ export default function Home() {
         <p>Carregando o controle da casa…</p>
       </div>
     );
-  if (accessState === 'anonymous') return <SignInGate />;
-  if (accessState === 'error')
-    return (
-      <main className="access-gate">
-        <div className="access-card">
-          <span className="access-mark">
-            <CircleDollarSign size={23} />
-          </span>
-          <p className="eyebrow">Nossa casa · finanças a dois</p>
-          <h1>Não foi possível carregar</h1>
-          <p>
-            Tente atualizar a página. Seus dados continuam protegidos e não são
-            exibidos sem uma conexão válida.
-          </p>
-          <button
-            className="primary-button access-button"
-            onClick={() => window.location.reload()}
-          >
-            Tentar novamente <ArrowUpRight size={16} />
-          </button>
-          <button
-            className="access-switch error-login-button"
-            onClick={() => signOut(firebaseAuth)}
-          >
-            Voltar para o login
-          </button>
-        </div>
-      </main>
-    );
+  if (accessState === 'anonymous')
+    return <SignInGate initialError={accessError} />;
   return (
     <div className="app-shell">
       <aside className="sidebar">
