@@ -748,35 +748,7 @@ export default function Home() {
             </div>
           </article>
         </section>
-        <div className="available-summary">
-          <CircleDollarSign size={16} />
-          <span>Disponível total da casa</span>
-          <b>{formatMoney(available)}</b>
-          <small>Banco + Flash, descontando faturas abertas</small>
-        </div>
         <section className="metrics-grid">
-          <article className="metric-card">
-            <div className="metric-top">
-              <span className="icon-bubble mint">
-                <ArrowDownLeft size={17} />
-              </span>
-              <span className="metric-trend positive">manual</span>
-            </div>
-            <p>Entradas no mês</p>
-            <strong>{formatMoney(totalIncomes)}</strong>
-            <small>Você pode lançar quando quiser</small>
-          </article>
-          <article className="metric-card">
-            <div className="metric-top">
-              <span className="icon-bubble coral">
-                <ArrowUpRight size={17} />
-              </span>
-              <span className="metric-trend neutral">período atual</span>
-            </div>
-            <p>Gastos no mês</p>
-            <strong>{formatMoney(totalExpenses)}</strong>
-            <small>{expenses.length} lançamentos</small>
-          </article>
           <article className="metric-card accent-card">
             <div className="metric-top">
               <span className="icon-bubble purple">
