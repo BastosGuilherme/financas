@@ -30,9 +30,12 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signOut,
 } from 'firebase/auth';
 import {
   loadFirebaseFinance,
+  recordFirebaseInvestmentSnapshot,
+  saveFirebaseCategory,
   saveFirebaseTransaction,
   updateFirebaseBalance,
 } from '@/lib/firebase-finance';
@@ -68,6 +71,17 @@ type Budget = {
   limitCents: number;
 };
 
+type InvestmentSnapshot = {
+  date: string;
+  totalCents: number;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 type FinancePayload = {
   mode: 'preview' | 'shared';
   currentUser: { displayName: string; email: string };
@@ -75,6 +89,8 @@ type FinancePayload = {
   accounts: Account[];
   transactions: Transaction[];
   budgets: Budget[];
+  investmentSnapshots: InvestmentSnapshot[];
+  categories: Category[];
 };
 
 type FormState = {
@@ -220,6 +236,8 @@ export default function Home() {
     accounts: [],
     transactions: [],
     budgets: [],
+    investmentSnapshots: [],
+    categories: [],
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -230,6 +248,8 @@ export default function Home() {
     'checking' | 'authenticated' | 'anonymous' | 'error'
   >('checking');
   const [notice, setNotice] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [filter, setFilter] = useState('Todos');
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>(
     {},
@@ -332,6 +352,14 @@ export default function Home() {
   const reserves = payload.accounts
     .filter((account) => account.kind === 'reserve')
     .reduce((sum, account) => sum + account.balanceCents, 0);
+  const investmentTarget = 5000000;
+  const investmentHistory = payload.investmentSnapshots;
+  const firstInvestmentValue = investmentHistory[0]?.totalCents ?? reserves;
+  const investmentGrowth = reserves - firstInvestmentValue;
+  const investmentProgress = Math.min(
+    Math.round((reserves / investmentTarget) * 100),
+    100,
+  );
   const filteredTransactions = payload.transactions.filter(
     (transaction) =>
       filter === 'Todos' || transaction.type === filter.toLowerCase(),
@@ -396,6 +424,26 @@ export default function Home() {
           updateFirebaseBalance(update.accountId, update.balanceCents),
         ),
       );
+      const updatedInvestments = updates
+        .filter((update) =>
+          payload.accounts.some(
+            (account) =>
+              account.id === update.accountId && account.kind === 'reserve',
+          ),
+        )
+        .reduce((sum, update) => sum + update.balanceCents, 0);
+      if (updatedInvestments) {
+        await recordFirebaseInvestmentSnapshot(updatedInvestments);
+        setPayload((current) => ({
+          ...current,
+          investmentSnapshots: [
+            ...current.investmentSnapshots.filter(
+              (snapshot) => snapshot.date !== new Date().toISOString().slice(0, 10),
+            ),
+            { date: new Date().toISOString().slice(0, 10), totalCents: updatedInvestments },
+          ],
+        }));
+      }
       setNotice('Saldos atualizados no controle compartilhado.');
     } catch {
       setNotice('Saldos atualizados nesta sessão.');
@@ -464,6 +512,37 @@ export default function Home() {
         installment: '',
         recurring: false,
       }));
+    }
+  }
+
+  async function addCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (
+      [...categories, ...payload.categories].some(
+        (category) => category.name.toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      setNotice('Essa categoria já existe.');
+      return;
+    }
+    const category: Category = {
+      id: `category-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${Date.now()}`,
+      name,
+      color: '#8d9996',
+    };
+    try {
+      await saveFirebaseCategory(category);
+      setPayload((current) => ({
+        ...current,
+        categories: [...current.categories, category],
+      }));
+      setForm((current) => ({ ...current, category: name }));
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+      setNotice('Categoria adicionada.');
+    } catch {
+      setNotice('Não foi possível salvar a categoria.');
     }
   }
 
@@ -574,6 +653,43 @@ export default function Home() {
               </div>
             </div>
           </article>
+        </section>
+        <section className="panel investment-progress-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Evolução dos investimentos</p>
+              <h2>Meta de R$ 50 mil</h2>
+            </div>
+            <span className="investment-growth">
+              {investmentGrowth >= 0 ? '+' : ''}{formatMoney(investmentGrowth)} desde o primeiro registro
+            </span>
+          </div>
+          <div className="investment-progress-top">
+            <strong>{formatMoney(reserves)}</strong>
+            <span>{investmentProgress}% da meta</span>
+          </div>
+          <div className="progress-track investment-track">
+            <span style={{ width: `${investmentProgress}%` }} />
+          </div>
+          <div className="investment-progress-foot">
+            <span>Meta: {formatMoney(investmentTarget)}</span>
+            <span>Faltam {formatMoney(Math.max(investmentTarget - reserves, 0))}</span>
+          </div>
+          <div className="investment-history" aria-label="Histórico dos investimentos">
+            {investmentHistory.slice(-8).map((snapshot) => (
+              <div key={snapshot.date}>
+                <span
+                  style={{
+                    height: `${Math.max((snapshot.totalCents / Math.max(reserves, 1)) * 100, 12)}%`,
+                  }}
+                />
+                <small>{formatDate(snapshot.date)}</small>
+              </div>
+            ))}
+          </div>
+          <small className="investment-note">
+            O histórico é atualizado uma vez por dia e sempre que você ajustar os saldos manualmente.
+          </small>
         </section>
         <div className="invoice-heading">
           <div>
@@ -1224,6 +1340,10 @@ export default function Home() {
             </div>
             <MoreHorizontal size={17} />
           </div>
+          <button onClick={() => signOut(firebaseAuth)}>
+            <ArrowUpRight size={17} />
+            <span>Sair</span>
+          </button>
         </div>
       </aside>
       <main className="main-content">
@@ -1444,29 +1564,61 @@ export default function Home() {
                 </label>
               </div>
               <div className="form-grid">
-                <label>
-                  Categoria
-                  <select
-                    value={form.category}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        category: event.target.value,
-                      }))
-                    }
-                  >
-                    {categories
-                      .filter((category) =>
-                        form.type === 'income'
-                          ? category.name === 'Salário' ||
-                            category.name === 'Outros'
-                          : category.name !== 'Salário',
-                      )
-                      .map((category) => (
-                        <option key={category.name}>{category.name}</option>
-                      ))}
-                  </select>
-                </label>
+                <div className="category-field">
+                  <label>
+                    Categoria
+                    <select
+                      required
+                      value={form.category}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          category: event.target.value,
+                        }))
+                      }
+                    >
+                      {[...categories, ...payload.categories]
+                        .filter((category) =>
+                          form.type === 'income'
+                            ? category.name === 'Salário' ||
+                              category.name === 'Outros'
+                            : category.name !== 'Salário',
+                        )
+                        .map((category) => (
+                          <option key={category.name}>{category.name}</option>
+                        ))}
+                    </select>
+                  </label>
+                  {isAddingCategory ? (
+                    <div className="new-category-row">
+                      <input
+                        autoFocus
+                        value={newCategoryName}
+                        onChange={(event) =>
+                          setNewCategoryName(event.target.value)
+                        }
+                        placeholder="Nome da categoria"
+                      />
+                      <button type="button" onClick={addCategory}>
+                        Adicionar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingCategory(false)}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="add-category-button"
+                      onClick={() => setIsAddingCategory(true)}
+                    >
+                      <Plus size={13} /> Nova categoria
+                    </button>
+                  )}
+                </div>
                 <label>
                   Conta
                   <select

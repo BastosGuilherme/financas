@@ -35,6 +35,17 @@ export type FirebaseTransaction = {
   installment: string | null;
 };
 
+export type FirebaseInvestmentSnapshot = {
+  date: string;
+  totalCents: number;
+};
+
+export type FirebaseCategory = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 const accountsPath = collection(
   firestore,
   'households',
@@ -46,6 +57,18 @@ const transactionsPath = collection(
   'households',
   HOUSEHOLD_ID,
   'transactions',
+);
+const investmentSnapshotsPath = collection(
+  firestore,
+  'households',
+  HOUSEHOLD_ID,
+  'investmentSnapshots',
+);
+const categoriesPath = collection(
+  firestore,
+  'households',
+  HOUSEHOLD_ID,
+  'categories',
 );
 
 const starterAccounts: FirebaseAccount[] = [
@@ -219,13 +242,50 @@ export async function loadFirebaseFinance() {
   const finalTransactionsResult = transactionsResult.empty
     ? await getDocs(query(transactionsPath, orderBy('transactionDate', 'desc')))
     : transactionsResult;
+  const snapshotsResult = await getDocs(
+    query(investmentSnapshotsPath, orderBy('date', 'asc')),
+  );
+  const categoriesResult = await getDocs(categoriesPath);
+  const snapshots = snapshotsResult.docs.map(
+    (item) => item.data() as FirebaseInvestmentSnapshot,
+  );
+  if (!snapshots.length) {
+    const initialTotalCents = accountsResult.docs
+      .map((item) => item.data() as FirebaseAccount)
+      .filter((account) => account.kind === 'reserve')
+      .reduce((sum, account) => sum + account.balanceCents, 0);
+    const date = new Date().toISOString().slice(0, 10);
+    await setDoc(doc(investmentSnapshotsPath, date), {
+      date,
+      totalCents: initialTotalCents,
+    });
+    snapshots.push({ date, totalCents: initialTotalCents });
+  }
   return {
     accounts: accountsResult.docs.map((item) => item.data() as FirebaseAccount),
     transactions: finalTransactionsResult.docs.map(
       (item) => item.data() as FirebaseTransaction,
     ),
     budgets: [],
+    investmentSnapshots: snapshots,
+    categories: categoriesResult.docs.map(
+      (item) => item.data() as FirebaseCategory,
+    ),
   };
+}
+
+export async function saveFirebaseCategory(category: FirebaseCategory) {
+  await setDoc(doc(categoriesPath, category.id), category);
+  return category;
+}
+
+export async function recordFirebaseInvestmentSnapshot(totalCents: number) {
+  const date = new Date().toISOString().slice(0, 10);
+  await setDoc(
+    doc(investmentSnapshotsPath, date),
+    { date, totalCents },
+    { merge: true },
+  );
 }
 
 export async function updateFirebaseBalance(
