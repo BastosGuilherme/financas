@@ -22,6 +22,7 @@ import {
   Receipt,
   Repeat2,
   Settings,
+  ShoppingCart,
   SlidersHorizontal,
   Sparkles,
   TrendingUp,
@@ -36,9 +37,12 @@ import {
 } from 'firebase/auth';
 import {
   loadFirebaseFinance,
+  deleteFirebaseShoppingItem,
   recordFirebaseInvestmentSnapshot,
   saveFirebaseCategory,
+  saveFirebaseShoppingItem,
   saveFirebaseTransaction,
+  updateFirebaseShoppingItem,
   updateFirebaseBalance,
 } from '@/lib/firebase-finance';
 import { firebaseAuth } from '@/lib/firebase';
@@ -84,6 +88,15 @@ type Category = {
   color: string;
 };
 
+type ShoppingItem = {
+  id: string;
+  name: string;
+  category: 'Supermercado' | 'Manutenção' | 'Casa' | 'Outros';
+  quantity: string;
+  completed: boolean;
+  createdAt: string;
+};
+
 type FinancePayload = {
   mode: 'preview' | 'shared';
   currentUser: { displayName: string; email: string };
@@ -93,6 +106,7 @@ type FinancePayload = {
   budgets: Budget[];
   investmentSnapshots: InvestmentSnapshot[];
   categories: Category[];
+  shoppingItems: ShoppingItem[];
 };
 
 type FormState = {
@@ -136,6 +150,7 @@ const navItems = [
   { id: 'transactions', label: 'Lançamentos', icon: List },
   { id: 'accounts', label: 'Contas e cartões', icon: WalletCards },
   { id: 'budgets', label: 'Limites', icon: SlidersHorizontal },
+  { id: 'shopping', label: 'Lista de compras', icon: ShoppingCart },
 ] as const;
 
 const today = new Date().toISOString().slice(0, 10);
@@ -241,6 +256,7 @@ export default function Home() {
     budgets: [],
     investmentSnapshots: [],
     categories: [],
+    shoppingItems: [],
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -255,6 +271,10 @@ export default function Home() {
   const [hideBalances, setHideBalances] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [shoppingName, setShoppingName] = useState('');
+  const [shoppingQuantity, setShoppingQuantity] = useState('');
+  const [shoppingCategory, setShoppingCategory] =
+    useState<ShoppingItem['category']>('Supermercado');
   const [filter, setFilter] = useState('Todos');
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>(
     {},
@@ -548,6 +568,73 @@ export default function Home() {
       setNotice('Categoria adicionada.');
     } catch {
       setNotice('Não foi possível salvar a categoria.');
+    }
+  }
+
+  async function addShoppingItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = shoppingName.trim();
+    if (!name) return;
+    const item: ShoppingItem = {
+      id: `shopping-${Date.now()}`,
+      name,
+      category: shoppingCategory,
+      quantity: shoppingQuantity.trim(),
+      completed: false,
+      createdAt: new Date().toISOString(),
+    };
+    try {
+      await saveFirebaseShoppingItem(item);
+      setPayload((current) => ({
+        ...current,
+        shoppingItems: [item, ...current.shoppingItems],
+      }));
+      setNotice('Item adicionado à lista.');
+    } catch {
+      setNotice('Não foi possível salvar o item.');
+    }
+    setShoppingName('');
+    setShoppingQuantity('');
+  }
+
+  async function toggleShoppingItem(item: ShoppingItem) {
+    const completed = !item.completed;
+    setPayload((current) => ({
+      ...current,
+      shoppingItems: current.shoppingItems.map((currentItem) =>
+        currentItem.id === item.id ? { ...currentItem, completed } : currentItem,
+      ),
+    }));
+    try {
+      await updateFirebaseShoppingItem(item.id, completed);
+    } catch {
+      setPayload((current) => ({
+        ...current,
+        shoppingItems: current.shoppingItems.map((currentItem) =>
+          currentItem.id === item.id
+            ? { ...currentItem, completed: item.completed }
+            : currentItem,
+        ),
+      }));
+      setNotice('Não foi possível atualizar o item.');
+    }
+  }
+
+  async function removeShoppingItem(item: ShoppingItem) {
+    setPayload((current) => ({
+      ...current,
+      shoppingItems: current.shoppingItems.filter(
+        (currentItem) => currentItem.id !== item.id,
+      ),
+    }));
+    try {
+      await deleteFirebaseShoppingItem(item.id);
+    } catch {
+      setPayload((current) => ({
+        ...current,
+        shoppingItems: [item, ...current.shoppingItems],
+      }));
+      setNotice('Não foi possível remover o item.');
     }
   }
 
@@ -1069,6 +1156,83 @@ export default function Home() {
     );
   }
 
+  function renderShopping() {
+    const pendingItems = payload.shoppingItems.filter((item) => !item.completed);
+    const completedItems = payload.shoppingItems.filter((item) => item.completed);
+    const items = [...pendingItems, ...completedItems];
+    return (
+      <section className="page-section shopping-page">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Hub da casa</p>
+            <h1>Lista de compras</h1>
+            <p className="muted">Uma lista compartilhada para Gui e Fer.</p>
+          </div>
+          <span className="shopping-count">{pendingItems.length} pendentes</span>
+        </div>
+        <form className="shopping-form" onSubmit={addShoppingItem}>
+          <input
+            required
+            value={shoppingName}
+            onChange={(event) => setShoppingName(event.target.value)}
+            placeholder="O que precisamos comprar?"
+          />
+          <input
+            value={shoppingQuantity}
+            onChange={(event) => setShoppingQuantity(event.target.value)}
+            placeholder="Quantidade (opcional)"
+          />
+          <select
+            value={shoppingCategory}
+            onChange={(event) =>
+              setShoppingCategory(event.target.value as ShoppingItem['category'])
+            }
+          >
+            <option>Supermercado</option>
+            <option>Manutenção</option>
+            <option>Casa</option>
+            <option>Outros</option>
+          </select>
+          <button className="primary-button" type="submit">
+            <Plus size={16} /> Adicionar
+          </button>
+        </form>
+        <div className="shopping-list panel">
+          {items.length ? (
+            items.map((item) => (
+              <div className={`shopping-item ${item.completed ? 'completed' : ''}`} key={item.id}>
+                <button
+                  className="shopping-check"
+                  aria-label={item.completed ? 'Marcar como pendente' : 'Marcar como comprado'}
+                  onClick={() => toggleShoppingItem(item)}
+                >
+                  {item.completed ? <Check size={15} /> : null}
+                </button>
+                <div className="shopping-item-copy">
+                  <b>{item.name}</b>
+                  <small>{item.quantity || 'Sem quantidade'} · {item.category}</small>
+                </div>
+                <button
+                  className="icon-button shopping-delete"
+                  aria-label={`Excluir ${item.name}`}
+                  onClick={() => removeShoppingItem(item)}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="empty-panel wide-empty">
+              <span className="empty-icon"><ShoppingCart size={17} /></span>
+              <b>Lista vazia</b>
+              <small>Adicione o primeiro item da casa.</small>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   if (isLoading || accessState === 'checking')
     return (
       <div className="loading-state">
@@ -1169,7 +1333,9 @@ export default function Home() {
               ? renderTransactions()
               : activeView === 'accounts'
                 ? renderAccounts()
-                : renderBudgets()}
+                : activeView === 'budgets'
+                  ? renderBudgets()
+                  : renderShopping()}
         </div>
       </main>
       <button

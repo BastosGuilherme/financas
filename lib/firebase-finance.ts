@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -46,6 +47,15 @@ export type FirebaseCategory = {
   color: string;
 };
 
+export type FirebaseShoppingItem = {
+  id: string;
+  name: string;
+  category: 'Supermercado' | 'Manutenção' | 'Casa' | 'Outros';
+  quantity: string;
+  completed: boolean;
+  createdAt: string;
+};
+
 const accountsPath = collection(
   firestore,
   'households',
@@ -69,6 +79,12 @@ const categoriesPath = collection(
   'households',
   HOUSEHOLD_ID,
   'categories',
+);
+const shoppingItemsPath = collection(
+  firestore,
+  'households',
+  HOUSEHOLD_ID,
+  'shoppingItems',
 );
 
 const starterAccounts: FirebaseAccount[] = [
@@ -262,6 +278,15 @@ export async function loadFirebaseFinance() {
   } catch {
     // Keep the dashboard available while an older Firestore ruleset is deployed.
   }
+  let shoppingItems: FirebaseShoppingItem[] = [];
+  try {
+    const shoppingItemsResult = await getDocs(shoppingItemsPath);
+    shoppingItems = shoppingItemsResult.docs.map(
+      (item) => item.data() as FirebaseShoppingItem,
+    );
+  } catch {
+    // The shopping hub is optional while its Firestore rules are deployed.
+  }
   if (!snapshots.length) {
     const initialTotalCents = accountsResult.docs
       .map((item) => item.data() as FirebaseAccount)
@@ -286,12 +311,29 @@ export async function loadFirebaseFinance() {
     budgets: [],
     investmentSnapshots: snapshots,
     categories: savedCategories,
+    shoppingItems,
   };
 }
 
 export async function saveFirebaseCategory(category: FirebaseCategory) {
   await setDoc(doc(categoriesPath, category.id), category);
   return category;
+}
+
+export async function saveFirebaseShoppingItem(item: FirebaseShoppingItem) {
+  await setDoc(doc(shoppingItemsPath, item.id), item);
+  return item;
+}
+
+export async function updateFirebaseShoppingItem(
+  id: string,
+  completed: boolean,
+) {
+  await updateDoc(doc(shoppingItemsPath, id), { completed });
+}
+
+export async function deleteFirebaseShoppingItem(id: string) {
+  await deleteDoc(doc(shoppingItemsPath, id));
 }
 
 export async function recordFirebaseInvestmentSnapshot(totalCents: number) {

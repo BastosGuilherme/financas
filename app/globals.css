@@ -74,6 +74,23 @@ button { cursor: pointer; }
 .balance-value strong { color: #fff; font-size: 25px; letter-spacing: -.06em; }
 .privacy-toggle { display: grid; place-items: center; padding: 5px; color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); border-radius: 7px; }
 .privacy-toggle:hover { color: #fff; background: rgba(255,255,255,.18); }
+.shopping-form { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(150px, .8fr) 150px auto; gap: 9px; margin-bottom: 15px; }
+.shopping-form input, .shopping-form select { width: 100%; height: 39px; padding: 0 11px; color: var(--ink); border: 1px solid var(--line); outline: 0; background: #fff; border-radius: 9px; font-size: 11px; }
+.shopping-form input:focus, .shopping-form select:focus { border-color: #98c9b9; box-shadow: 0 0 0 3px #def1e9; }
+.shopping-count { color: var(--purple); font-size: 11px; font-weight: 700; }
+.shopping-list { padding: 8px 18px; }
+.shopping-item { display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--line); }
+.shopping-item:last-child { border-bottom: 0; }
+.shopping-check { width: 23px; height: 23px; display: grid; place-items: center; flex: 0 0 auto; color: #fff; border: 1px solid #cbd8d2; background: #fff; border-radius: 7px; }
+.shopping-check:hover { border-color: var(--mint-strong); background: #e2f4ec; }
+.shopping-item.completed .shopping-check { border-color: var(--mint-strong); background: var(--mint-strong); }
+.shopping-item-copy { display: grid; gap: 4px; flex: 1; }
+.shopping-item-copy b { color: var(--ink); font-size: 12px; }
+.shopping-item-copy small { color: var(--muted); font-size: 10px; }
+.shopping-item.completed .shopping-item-copy b { color: #9ba5a2; text-decoration: line-through; }
+.shopping-delete { width: 28px; height: 28px; }
+@media (max-width: 780px) { .shopping-form { grid-template-columns: 1fr 1fr; }.shopping-form button { grid-column: 1 / -1; } }
+@media (max-width: 420px) { .shopping-form { grid-template-columns: 1fr; }.shopping-form button { grid-column: auto; } }
 .error-login-button { margin-top: 12px; }
 .add-category-button { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 0; margin-top: 7px; color: var(--purple); border: 0; background: transparent; font-size: 10px; font-weight: 700; }
 .add-category-button:hover { color: var(--navy); }
