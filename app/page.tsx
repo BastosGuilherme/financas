@@ -28,12 +28,10 @@ import {
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import {
-  ensureMember,
   loadFirebaseFinance,
   saveFirebaseTransaction,
   updateFirebaseBalance,
@@ -161,21 +159,14 @@ function getCurrentMonth() {
 function SignInGate() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     try {
-      if (isCreating)
-        await createUserWithEmailAndPassword(firebaseAuth, email, password);
-      else await signInWithEmailAndPassword(firebaseAuth, email, password);
+      await signInWithEmailAndPassword(firebaseAuth, email, password);
     } catch {
-      setError(
-        isCreating
-          ? 'Não foi possível criar a conta.'
-          : 'E-mail ou senha inválidos.',
-      );
+      setError('E-mail ou senha inválidos.');
     }
   }
   return (
@@ -208,17 +199,11 @@ function SignInGate() {
           />
           {error && <small className="access-error">{error}</small>}
           <button className="primary-button access-button">
-            {isCreating ? 'Criar conta' : 'Entrar'} <ArrowUpRight size={16} />
+            Entrar <ArrowUpRight size={16} />
           </button>
         </form>
-        <button
-          className="access-switch"
-          onClick={() => setIsCreating((current) => !current)}
-        >
-          {isCreating ? 'Já tenho uma conta' : 'Criar minha conta'}
-        </button>
         <small>
-          Depois do login, Gui e Fer compartilham a mesma visão financeira.
+          Usuários são cadastrados pelo administrador do sistema.
         </small>
       </div>
     </main>
@@ -270,11 +255,6 @@ export default function Home() {
         return;
       }
       try {
-        await ensureMember({
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-        });
         const financeData = await loadFirebaseFinance();
         if (!active) return;
         setPayload({

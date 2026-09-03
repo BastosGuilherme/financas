@@ -17,10 +17,23 @@ service cloud.firestore {
 
     match /households/{householdId}/members/{userId} {
       allow read: if isMember(householdId);
-      allow write: if signedIn() && request.auth.uid == userId;
+      // Membership is provisioned manually by the administrator.
+      allow write: if false;
     }
 
-    match /households/{householdId}/{document=**} {
+    match /households/{householdId}/accounts/{accountId} {
+      allow read, write: if isMember(householdId);
+    }
+
+    match /households/{householdId}/transactions/{transactionId} {
+      allow read, write: if isMember(householdId);
+    }
+
+    match /households/{householdId}/budgets/{budgetId} {
+      allow read, write: if isMember(householdId);
+    }
+
+    match /households/{householdId}/categories/{categoryId} {
       allow read, write: if isMember(householdId);
     }
   }
