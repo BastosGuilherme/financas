@@ -11,6 +11,8 @@ import {
   ChevronDown,
   CircleDollarSign,
   CreditCard,
+  Eye,
+  EyeOff,
   Home as HomeIcon,
   LayoutDashboard,
   List,
@@ -250,6 +252,7 @@ export default function Home() {
   >('checking');
   const [notice, setNotice] = useState('');
   const [accessError, setAccessError] = useState('');
+  const [hideBalances, setHideBalances] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [filter, setFilter] = useState('Todos');
@@ -357,6 +360,8 @@ export default function Home() {
     .filter((account) => account.kind === 'credit_card')
     .reduce((sum, account) => sum + account.balanceCents, 0);
   const available = bankBalance + flashBalance - cardBalance;
+  const displayBalance = (cents: number) =>
+    hideBalances ? '••••••' : formatMoney(cents);
   const reserves = payload.accounts
     .filter((account) => account.kind === 'reserve')
     .reduce((sum, account) => sum + account.balanceCents, 0);
@@ -592,18 +597,27 @@ export default function Home() {
                 </div>
                 <p>Saldo disponível</p>
               </div>
-              <strong>{formatMoney(bankBalance)}</strong>
+              <div className="balance-value">
+                <strong>{displayBalance(bankBalance)}</strong>
+                <button
+                  className="privacy-toggle"
+                  aria-label={hideBalances ? 'Mostrar saldos' : 'Esconder saldos'}
+                  onClick={() => setHideBalances((current) => !current)}
+                >
+                  {hideBalances ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <div className="owner-balance-list">
               <div>
                 <span className="owner-avatar gui-avatar">G</span>
                 <span>Gui</span>
-                <b>{formatMoney(balanceFor('bank', 'Gui'))}</b>
+                <b>{displayBalance(balanceFor('bank', 'Gui'))}</b>
               </div>
               <div>
                 <span className="owner-avatar fer-avatar">F</span>
                 <span>Fer</span>
-                <b>{formatMoney(balanceFor('bank', 'Fer'))}</b>
+                <b>{displayBalance(balanceFor('bank', 'Fer'))}</b>
               </div>
             </div>
           </article>
@@ -615,18 +629,27 @@ export default function Home() {
                 </div>
                 <p>Saldo disponível</p>
               </div>
-              <strong>{formatMoney(flashBalance)}</strong>
+              <div className="balance-value">
+                <strong>{displayBalance(flashBalance)}</strong>
+                <button
+                  className="privacy-toggle"
+                  aria-label={hideBalances ? 'Mostrar saldos' : 'Esconder saldos'}
+                  onClick={() => setHideBalances((current) => !current)}
+                >
+                  {hideBalances ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <div className="owner-balance-list">
               <div>
                 <span className="owner-avatar gui-avatar">G</span>
                 <span>Gui</span>
-                <b>{formatMoney(balanceFor('flash', 'Gui'))}</b>
+                <b>{displayBalance(balanceFor('flash', 'Gui'))}</b>
               </div>
               <div>
                 <span className="owner-avatar fer-avatar">F</span>
                 <span>Fer</span>
-                <b>{formatMoney(balanceFor('flash', 'Fer'))}</b>
+                <b>{displayBalance(balanceFor('flash', 'Fer'))}</b>
               </div>
             </div>
           </article>
@@ -638,18 +661,27 @@ export default function Home() {
                 </div>
                 <p>Valor investido</p>
               </div>
-              <strong>{formatMoney(reserves)}</strong>
+              <div className="balance-value">
+                <strong>{displayBalance(reserves)}</strong>
+                <button
+                  className="privacy-toggle"
+                  aria-label={hideBalances ? 'Mostrar saldos' : 'Esconder saldos'}
+                  onClick={() => setHideBalances((current) => !current)}
+                >
+                  {hideBalances ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <div className="owner-balance-list">
               <div>
                 <span className="owner-avatar gui-avatar">G</span>
                 <span>Gui</span>
-                <b>{formatMoney(balanceFor('reserve', 'Gui'))}</b>
+                <b>{displayBalance(balanceFor('reserve', 'Gui'))}</b>
               </div>
               <div>
                 <span className="owner-avatar fer-avatar">F</span>
                 <span>Fer</span>
-                <b>{formatMoney(balanceFor('reserve', 'Fer'))}</b>
+                <b>{displayBalance(balanceFor('reserve', 'Fer'))}</b>
               </div>
             </div>
           </article>
@@ -671,7 +703,7 @@ export default function Home() {
                 <h3>Cartão do Gui</h3>
                 <small>Fatura aberta</small>
               </div>
-              <strong>{formatMoney(balanceFor('credit_card', 'Gui'))}</strong>
+              <strong>{displayBalance(balanceFor('credit_card', 'Gui'))}</strong>
             </div>
             <div className="invoice-card-foot">
               <span>Gui</span>
@@ -691,7 +723,7 @@ export default function Home() {
                 <h3>Cartão da Fer</h3>
                 <small>Fatura aberta</small>
               </div>
-              <strong>{formatMoney(balanceFor('credit_card', 'Fer'))}</strong>
+              <strong>{displayBalance(balanceFor('credit_card', 'Fer'))}</strong>
             </div>
             <div className="invoice-card-foot">
               <span>Fer</span>

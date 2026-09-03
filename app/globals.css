@@ -70,6 +70,10 @@ button { cursor: pointer; }
 .access-form { display: grid; gap: 10px; }.access-form input { width: 100%; height: 39px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfb; }.access-form .access-button { margin-top: 5px; }.access-switch { width: 100%; margin-top: 11px; padding: 0; color: var(--purple); border: 0; background: transparent; font-size: 10px; font-weight: 700; }.access-error { color: var(--coral); font-size: 10px; }
 .category-field { min-width: 0; }
 .overview-spending-grid { grid-template-columns: 1fr; }
+.balance-value { display: flex; align-items: center; align-self: flex-end; gap: 8px; }
+.balance-value strong { color: #fff; font-size: 25px; letter-spacing: -.06em; }
+.privacy-toggle { display: grid; place-items: center; padding: 5px; color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); border-radius: 7px; }
+.privacy-toggle:hover { color: #fff; background: rgba(255,255,255,.18); }
 .error-login-button { margin-top: 12px; }
 .add-category-button { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 0; margin-top: 7px; color: var(--purple); border: 0; background: transparent; font-size: 10px; font-weight: 700; }
 .add-category-button:hover { color: var(--navy); }
