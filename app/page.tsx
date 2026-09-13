@@ -163,8 +163,19 @@ const navItems = [
   { id: 'transactions', label: 'Lançamentos', icon: List },
   { id: 'accounts', label: 'Contas e cartões', icon: WalletCards },
   { id: 'budgets', label: 'Limites', icon: SlidersHorizontal },
+  { id: 'fixed', label: 'Contas fixas', icon: Repeat2 },
   { id: 'shopping', label: 'Lista de compras', icon: ShoppingCart },
   { id: 'appointments', label: 'Compromissos', icon: CalendarDays },
+] as const;
+
+const fixedBillDefinitions = [
+  { id: 'rent', name: 'Aluguel', category: 'Moradia' },
+  { id: 'condo', name: 'Condomínio', category: 'Moradia' },
+  { id: 'energy', name: 'Energia', category: 'Moradia' },
+  { id: 'water', name: 'Água', category: 'Moradia' },
+  { id: 'internet', name: 'Internet', category: 'Serviços' },
+  { id: 'spotify', name: 'Spotify', category: 'Assinaturas' },
+  { id: 'netflix', name: 'Netflix', category: 'Assinaturas' },
 ] as const;
 
 const today = new Date().toISOString().slice(0, 10);
@@ -1228,6 +1239,51 @@ export default function Home() {
     );
   }
 
+  function renderFixedBills() {
+    return (
+      <section className="page-section">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Lista da casa</p>
+            <h1>Contas fixas</h1>
+            <p className="muted">
+              Moradia, serviços e assinaturas para consultar quando precisar.
+            </p>
+          </div>
+        </div>
+        <article className="panel fixed-bills-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Contas recorrentes</p>
+              <h2>Contas da casa</h2>
+            </div>
+          </div>
+          <div className="fixed-bills-list">
+            {fixedBillDefinitions.map((bill) => {
+              const isSubscription = bill.category === 'Assinaturas';
+              const Icon = isSubscription ? Repeat2 : HomeIcon;
+              return (
+                <div className="fixed-bill-row" key={bill.id}>
+                  <span
+                    className={`fixed-bill-icon${
+                      isSubscription ? ' subscription' : ''
+                    }`}
+                  >
+                    <Icon size={17} />
+                  </span>
+                  <div className="fixed-bill-copy">
+                    <b>{bill.name}</b>
+                    <small>{bill.category}</small>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </article>
+      </section>
+    );
+  }
+
   function renderShopping() {
     const pendingItems = payload.shoppingItems.filter((item) => !item.completed);
     const completedItems = payload.shoppingItems.filter((item) => item.completed);
@@ -1490,10 +1546,6 @@ export default function Home() {
         </nav>
         <div className="sidebar-footer">
           <button>
-            <Repeat2 size={17} />
-            <span>Recorrentes</span>
-          </button>
-          <button>
             <Settings size={17} />
             <span>Configurações</span>
           </button>
@@ -1544,18 +1596,22 @@ export default function Home() {
                 ? renderAccounts()
                 : activeView === 'budgets'
                   ? renderBudgets()
+                  : activeView === 'fixed'
+                    ? renderFixedBills()
                   : activeView === 'shopping'
                     ? renderShopping()
                     : renderAppointments()}
         </div>
       </main>
-      <button
-        className="floating-add"
-        onClick={() => setIsComposerOpen(true)}
-        aria-label="Novo lançamento"
-      >
-        <Plus size={22} />
-      </button>
+      {activeView !== 'fixed' && (
+        <button
+          className="floating-add"
+          onClick={() => setIsComposerOpen(true)}
+          aria-label="Novo lançamento"
+        >
+          <Plus size={22} />
+        </button>
+      )}
       <nav className="mobile-nav" aria-label="Navegação móvel">
         {navItems.map((item) => {
           const Icon = item.icon;

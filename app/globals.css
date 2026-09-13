@@ -126,3 +126,14 @@ button { cursor: pointer; }
 .new-category-row input { min-width: 0; }
 .new-category-row button { min-height: 31px; padding: 0 8px; color: var(--navy); border: 1px solid var(--line); background: #fff; border-radius: 7px; font-size: 9px; font-weight: 700; }
 .new-category-row button:first-of-type { color: #fff; border-color: var(--navy); background: var(--navy); }
+.fixed-bills-panel { max-width: 860px; }
+.fixed-bills-panel .panel-heading { margin-bottom: 8px; }
+.fixed-bills-list { display: grid; }
+.fixed-bill-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 13px; align-items: center; min-height: 70px; padding: 10px 0; border-bottom: 1px solid #eef2ef; }
+.fixed-bill-row:last-child { border-bottom: 0; }
+.fixed-bill-icon { width: 32px; height: 32px; display: grid; place-items: center; color: var(--coral); background: #fff0eb; border-radius: 9px; }
+.fixed-bill-icon.subscription { color: var(--purple); background: #eeefff; }
+.fixed-bill-copy { min-width: 0; }
+.fixed-bill-copy b, .fixed-bill-copy small { display: block; }
+.fixed-bill-copy b { color: var(--navy); font-size: 13px; }
+.fixed-bill-copy small { margin-top: 5px; color: var(--muted); font-size: 10px; }
