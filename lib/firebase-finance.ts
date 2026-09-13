@@ -65,6 +65,14 @@ export type FirebaseAppointment = {
   notes: string;
 };
 
+export type FirebaseFixedBill = {
+  id: string;
+  name: string;
+  category: 'Moradia' | 'Serviços' | 'Assinaturas' | 'Outros';
+  amountCents: number | null;
+  createdAt: string;
+};
+
 const accountsPath = collection(
   firestore,
   'households',
@@ -101,6 +109,28 @@ const appointmentsPath = collection(
   HOUSEHOLD_ID,
   'appointments',
 );
+const fixedBillsPath = collection(
+  firestore,
+  'households',
+  HOUSEHOLD_ID,
+  'fixedBills',
+);
+
+const starterFixedBills: FirebaseFixedBill[] = [
+  ['fixed-rent', 'Aluguel', 'Moradia'],
+  ['fixed-condo', 'Condomínio', 'Moradia'],
+  ['fixed-energy', 'Energia', 'Moradia'],
+  ['fixed-water', 'Água', 'Moradia'],
+  ['fixed-internet', 'Internet', 'Serviços'],
+  ['fixed-spotify', 'Spotify', 'Assinaturas'],
+  ['fixed-netflix', 'Netflix', 'Assinaturas'],
+].map(([id, name, category], index) => ({
+  id,
+  name,
+  category: category as FirebaseFixedBill['category'],
+  amountCents: null,
+  createdAt: `2026-01-01T00:00:0${index}.000Z`,
+}));
 
 const starterAccounts: FirebaseAccount[] = [
   ['bank-gui', 'Banco do Gui', 'bank', 'Gui', 356399],
@@ -311,6 +341,23 @@ export async function loadFirebaseFinance() {
   } catch {
     // The agenda is optional while its Firestore rules are deployed.
   }
+  let fixedBills: FirebaseFixedBill[] = [];
+  try {
+    const fixedBillsResult = await getDocs(fixedBillsPath);
+    fixedBills = fixedBillsResult.docs
+      .map((item) => item.data() as FirebaseFixedBill)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    if (!fixedBills.length) {
+      const batch = writeBatch(firestore);
+      starterFixedBills.forEach((bill) =>
+        batch.set(doc(fixedBillsPath, bill.id), bill),
+      );
+      await batch.commit();
+      fixedBills = starterFixedBills;
+    }
+  } catch {
+    // The fixed bills list is optional while its Firestore rules are deployed.
+  }
   if (!snapshots.length) {
     const initialTotalCents = accountsResult.docs
       .map((item) => item.data() as FirebaseAccount)
@@ -337,6 +384,7 @@ export async function loadFirebaseFinance() {
     categories: savedCategories,
     shoppingItems,
     appointments,
+    fixedBills,
   };
 }
 
@@ -368,6 +416,11 @@ export async function saveFirebaseAppointment(appointment: FirebaseAppointment) 
 
 export async function deleteFirebaseAppointment(id: string) {
   await deleteDoc(doc(appointmentsPath, id));
+}
+
+export async function saveFirebaseFixedBill(bill: FirebaseFixedBill) {
+  await setDoc(doc(fixedBillsPath, bill.id), bill);
+  return bill;
 }
 
 export async function recordFirebaseInvestmentSnapshot(totalCents: number) {

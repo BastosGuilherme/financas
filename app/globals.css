@@ -119,6 +119,7 @@ button { cursor: pointer; }
 @media (max-width: 780px) { .shopping-form { grid-template-columns: 1fr 1fr; }.shopping-form button { grid-column: 1 / -1; } }
 @media (max-width: 420px) { .shopping-form { grid-template-columns: 1fr; }.shopping-form button { grid-column: auto; } }
 @media (max-width: 780px) { .appointments-layout { grid-template-columns: 1fr; }.calendar-day, .calendar-empty { min-height: 45px; } }
+@media (max-width: 780px) { .fixed-bills-layout { grid-template-columns: 1fr; }.fixed-bill-row { grid-template-columns: 32px minmax(0, 1fr); gap: 12px; }.fixed-bill-amount { grid-column: 2; margin-top: -4px; text-align: left; } }
 .error-login-button { margin-top: 12px; }
 .add-category-button { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 0; margin-top: 7px; color: var(--purple); border: 0; background: transparent; font-size: 10px; font-weight: 700; }
 .add-category-button:hover { color: var(--navy); }
@@ -128,8 +129,14 @@ button { cursor: pointer; }
 .new-category-row button:first-of-type { color: #fff; border-color: var(--navy); background: var(--navy); }
 .fixed-bills-panel { max-width: 860px; }
 .fixed-bills-panel .panel-heading { margin-bottom: 8px; }
+.fixed-bills-layout { display: grid; grid-template-columns: minmax(260px, .78fr) minmax(0, 1.22fr); gap: 15px; align-items: start; }
+.fixed-bill-form-panel .panel-heading svg { color: var(--purple); }
+.fixed-bill-form { display: grid; gap: 14px; }
+.fixed-bill-form label { display: grid; gap: 7px; color: #62706d; font-size: 10px; font-weight: 700; }
+.fixed-bill-form input, .fixed-bill-form select { width: 100%; height: 39px; padding: 0 11px; color: var(--ink); border: 1px solid var(--line); outline: 0; background: #fbfcfb; border-radius: 9px; font-size: 12px; font-family: inherit; }
+.fixed-bill-form input:focus, .fixed-bill-form select:focus { border-color: #98c9b9; box-shadow: 0 0 0 3px #def1e9; }
 .fixed-bills-list { display: grid; }
-.fixed-bill-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 13px; align-items: center; min-height: 70px; padding: 10px 0; border-bottom: 1px solid #eef2ef; }
+.fixed-bill-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 13px; align-items: center; min-height: 70px; padding: 10px 0; border-bottom: 1px solid #eef2ef; }
 .fixed-bill-row:last-child { border-bottom: 0; }
 .fixed-bill-icon { width: 32px; height: 32px; display: grid; place-items: center; color: var(--coral); background: #fff0eb; border-radius: 9px; }
 .fixed-bill-icon.subscription { color: var(--purple); background: #eeefff; }
@@ -137,3 +144,4 @@ button { cursor: pointer; }
 .fixed-bill-copy b, .fixed-bill-copy small { display: block; }
 .fixed-bill-copy b { color: var(--navy); font-size: 13px; }
 .fixed-bill-copy small { margin-top: 5px; color: var(--muted); font-size: 10px; }
+.fixed-bill-amount { color: var(--navy); font-size: 13px; text-align: right; white-space: nowrap; }

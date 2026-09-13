@@ -42,6 +42,7 @@ import {
   deleteFirebaseAppointment,
   recordFirebaseInvestmentSnapshot,
   saveFirebaseCategory,
+  saveFirebaseFixedBill,
   saveFirebaseShoppingItem,
   saveFirebaseAppointment,
   saveFirebaseTransaction,
@@ -109,6 +110,14 @@ type Appointment = {
   notes: string;
 };
 
+type FixedBill = {
+  id: string;
+  name: string;
+  category: 'Moradia' | 'Serviços' | 'Assinaturas' | 'Outros';
+  amountCents: number | null;
+  createdAt: string;
+};
+
 type FinancePayload = {
   mode: 'preview' | 'shared';
   currentUser: { displayName: string; email: string };
@@ -120,6 +129,7 @@ type FinancePayload = {
   categories: Category[];
   shoppingItems: ShoppingItem[];
   appointments: Appointment[];
+  fixedBills: FixedBill[];
 };
 
 type FormState = {
@@ -168,20 +178,19 @@ const navItems = [
   { id: 'appointments', label: 'Compromissos', icon: CalendarDays },
 ] as const;
 
-const fixedBillDefinitions = [
-  { id: 'rent', name: 'Aluguel', category: 'Moradia' },
-  { id: 'condo', name: 'Condomínio', category: 'Moradia' },
-  { id: 'energy', name: 'Energia', category: 'Moradia' },
-  { id: 'water', name: 'Água', category: 'Moradia' },
-  { id: 'internet', name: 'Internet', category: 'Serviços' },
-  { id: 'spotify', name: 'Spotify', category: 'Assinaturas' },
-  { id: 'netflix', name: 'Netflix', category: 'Assinaturas' },
-] as const;
-
 const today = new Date().toISOString().slice(0, 10);
 
 function formatMoney(cents: number) {
   return currency.format(cents / 100);
+}
+
+function parseAmountToCents(value: string) {
+  const cleaned = value.replace(/[^\d,.-]/g, '');
+  const normalized = cleaned.includes(',')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) : null;
 }
 
 function initials(name: string) {
@@ -283,6 +292,7 @@ export default function Home() {
     categories: [],
     shoppingItems: [],
     appointments: [],
+    fixedBills: [],
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -307,6 +317,11 @@ export default function Home() {
   const [appointmentCategory, setAppointmentCategory] =
     useState<Appointment['category']>('Pessoal');
   const [appointmentNotes, setAppointmentNotes] = useState('');
+  const [fixedBillName, setFixedBillName] = useState('');
+  const [fixedBillAmount, setFixedBillAmount] = useState('');
+  const [fixedBillCategory, setFixedBillCategory] =
+    useState<FixedBill['category']>('Moradia');
+  const [isSavingFixedBill, setIsSavingFixedBill] = useState(false);
   const [selectedAppointmentDate, setSelectedAppointmentDate] =
     useState(today);
   const [filter, setFilter] = useState('Todos');
@@ -715,6 +730,39 @@ export default function Home() {
         appointments: [...current.appointments, appointment],
       }));
       setNotice('Não foi possível remover o compromisso.');
+    }
+  }
+
+  async function addFixedBill(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = fixedBillName.trim();
+    const amountCents = parseAmountToCents(fixedBillAmount);
+    if (!name || amountCents === null) {
+      setNotice('Informe o nome e um valor válido para a conta.');
+      return;
+    }
+    const bill: FixedBill = {
+      id: `fixed-${Date.now()}`,
+      name,
+      category: fixedBillCategory,
+      amountCents,
+      createdAt: new Date().toISOString(),
+    };
+    setIsSavingFixedBill(true);
+    try {
+      await saveFirebaseFixedBill(bill);
+      setPayload((current) => ({
+        ...current,
+        fixedBills: [...current.fixedBills, bill],
+      }));
+      setFixedBillName('');
+      setFixedBillAmount('');
+      setFixedBillCategory('Moradia');
+      setNotice('Conta fixa adicionada.');
+    } catch {
+      setNotice('Não foi possível salvar a conta fixa.');
+    } finally {
+      setIsSavingFixedBill(false);
     }
   }
 
@@ -1247,39 +1295,99 @@ export default function Home() {
             <p className="eyebrow">Lista da casa</p>
             <h1>Contas fixas</h1>
             <p className="muted">
-              Moradia, serviços e assinaturas para consultar quando precisar.
+              Cadastre as contas da casa e consulte o valor de cada uma.
             </p>
           </div>
         </div>
-        <article className="panel fixed-bills-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Contas recorrentes</p>
-              <h2>Contas da casa</h2>
+        <div className="fixed-bills-layout">
+          <article className="panel fixed-bill-form-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Nova conta</p>
+                <h2>Lançar conta fixa</h2>
+              </div>
+              <Repeat2 size={18} />
             </div>
-          </div>
-          <div className="fixed-bills-list">
-            {fixedBillDefinitions.map((bill) => {
-              const isSubscription = bill.category === 'Assinaturas';
-              const Icon = isSubscription ? Repeat2 : HomeIcon;
-              return (
-                <div className="fixed-bill-row" key={bill.id}>
-                  <span
-                    className={`fixed-bill-icon${
-                      isSubscription ? ' subscription' : ''
-                    }`}
-                  >
-                    <Icon size={17} />
-                  </span>
-                  <div className="fixed-bill-copy">
-                    <b>{bill.name}</b>
-                    <small>{bill.category}</small>
+            <form className="fixed-bill-form" onSubmit={addFixedBill}>
+              <label>
+                Nome da conta
+                <input
+                  required
+                  value={fixedBillName}
+                  onChange={(event) => setFixedBillName(event.target.value)}
+                  placeholder="Ex.: Aluguel"
+                />
+              </label>
+              <label>
+                Valor mensal
+                <input
+                  required
+                  inputMode="decimal"
+                  value={fixedBillAmount}
+                  onChange={(event) => setFixedBillAmount(event.target.value)}
+                  placeholder="Ex.: R$ 1.500,00"
+                />
+              </label>
+              <label>
+                Categoria
+                <select
+                  value={fixedBillCategory}
+                  onChange={(event) =>
+                    setFixedBillCategory(
+                      event.target.value as FixedBill['category'],
+                    )
+                  }
+                >
+                  <option>Moradia</option>
+                  <option>Serviços</option>
+                  <option>Assinaturas</option>
+                  <option>Outros</option>
+                </select>
+              </label>
+              <button
+                className="primary-button form-submit"
+                disabled={isSavingFixedBill}
+              >
+                {isSavingFixedBill ? 'Salvando…' : 'Adicionar conta'}{' '}
+                <Plus size={16} />
+              </button>
+            </form>
+          </article>
+          <article className="panel fixed-bills-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Contas recorrentes</p>
+                <h2>Contas da casa</h2>
+              </div>
+            </div>
+            <div className="fixed-bills-list">
+              {payload.fixedBills.map((bill) => {
+                const isSubscription = bill.category === 'Assinaturas';
+                const Icon = isSubscription ? Repeat2 : HomeIcon;
+                return (
+                  <div className="fixed-bill-row" key={bill.id}>
+                    <span
+                      className={`fixed-bill-icon${
+                        isSubscription ? ' subscription' : ''
+                      }`}
+                    >
+                      <Icon size={17} />
+                    </span>
+                    <div className="fixed-bill-copy">
+                      <b>{bill.name}</b>
+                      <small>{bill.category}</small>
+                    </div>
+                    <strong className="fixed-bill-amount">
+                      {bill.amountCents === null
+                        ? 'Valor não informado'
+                        : formatMoney(bill.amountCents)}
+                    </strong>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </article>
+                );
+              })}
+            </div>
+          </article>
+        </div>
       </section>
     );
   }
